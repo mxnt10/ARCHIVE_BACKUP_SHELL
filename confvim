@@ -1,0 +1,13 @@
+#!/bin/bash
+
+./configure \
+--with-global-runtime=huge \
+--with-modified-by=huge \
+--with-features=huge \
+--enable-luainterp=dynamic \
+--enable-perlinterp=dynamic \
+--enable-python3interp=dynamic \
+--enable-cscope \
+--enable-gtk2-check \
+--enable-gnome-check \
+--with-x --prefix=/usr 

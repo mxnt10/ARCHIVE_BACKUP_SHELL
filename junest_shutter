@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+export JUNEST_HOME=~/shutter
+
+junest setup
+
+junest -f sh -c "pacman --noconfirm -Syy && pacman --noconfirm -Syu && pacman --noconfirm -S gnu-free-fonts shutter breeze breeze-gtk"

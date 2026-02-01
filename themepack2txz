@@ -1,0 +1,78 @@
+#!/bin/bash
+
+#
+# themepack2txz - Versão 1.0
+#
+# By Mauricio Ferrari
+#
+# Data: 26/08/2020
+#
+# Requer o cabextract instalado.
+#
+
+LOCALDIR=$(pwd)
+ARCH=$(uname -m)
+VERSION=${VERSION:-1.0}
+BUILD=${BUILD:-1theme}
+
+noroot(){
+	echo
+	echo ' _   _         ____             _     _ '
+	echo '| \ | | ___   |  _ \ ___   ___ | |_  | |'
+	echo '|  \| |/ _ \  | |_) / _ \ / _ \| __| | |'
+	echo '| |\  | (_) | |  _ < (_) | (_) | |_  |_|'
+	echo '|_| \_|\___/  |_| \_\___/ \___/ \__| (_)'
+	echo
+	echo
+	exit
+}
+
+info(){
+	echo
+	echo "$0"
+	echo
+	echo "Uso: themepack2txz theme.themepack"
+	echo
+	exit
+}
+
+slackdescgen(){
+	echo "# HOW TO EDIT THIS FILE:
+# The 'handy ruler' below makes it easier to edit a package description.  Line
+# up the first '|' above the ':' following the base package name, and the '|' on
+# the right side marks the last column you can put a character in.  You must make
+# exactly 11 lines for the formatting to be correct.  It's also customary to
+# leave one space after the ':'.
+
+       |-----handy-ruler------------------------------------------------------|
+themtxz:
+themtxz: Created By themepack2txz
+themtxz:
+themtxz:
+themtxz:
+themtxz:
+themtxz:
+themtxz:
+themtxz:
+themtxz:
+themtxz:"| tee /tmp/$FOLDER/install/slackdesc > /dev/null
+}
+
+createtxz(){
+	cd /tmp/$FOLDER/
+	makepkg -c n $LOCALDIR/$FOLDER-$VERSION-$ARCH-$BUILD.txz
+}
+
+[[ `id -u` != 0 ]] && noroot
+[[ "$1" = "" ]] && info
+
+for FILE in $* ; do
+	FOLDER=$( ls $FILE | cut -d '.' -f1 )
+	mkdir -p tmp /tmp/$FOLDER/install /tmp/$FOLDER/usr/share/backgrounds/$FOLDER
+	cabextract -d tmp $FILE
+	mv tmp/D*/* /tmp/$FOLDER/usr/share/backgrounds/$FOLDER
+	slackdescgen && createtxz
+	cd $LOCALDIR
+	rm -r tmp /tmp/$FOLDER
+	exit 0
+done

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+i=0
+for x in $(eval echo cpu{1..$(nproc)})
+{
+    cpus+=(--field "CPU-$((i++))" )
+}
+
+while read $(eval echo cpu{1..${i}}) <<< $(paste /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq)
+do
+
+    for v in $(eval echo \$cpu{1..${i}})
+    {
+        [ $v -ge 1000000 ] && {
+            echo ${v::1}.${v:2:2} GHz
+        } || {
+            echo ${v::3}.${v:4:2} MHz
+        }
+    }
+
+    sleep 1
+done | yad --form ${cpus[*]} --cycle-read --button yad-cancel:1

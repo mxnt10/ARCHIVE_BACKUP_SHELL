@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# ### FileList2Link v4.4 - By Mauricio Ferrari - 16/01/2022 ###
+#
+##################################################################
+
+
+# ### Definições de Cores ###
+
+R='\e[31m'
+G='\e[32m'
+Y='\e[33m'
+B='\e[34m'
+C='\e[36m'
+T='\e[m'
+
+
+# ### Informações de Versão ###
+
+[ ! "$1" ] && {
+	printf "\n$Y${0##*/} $B(FileList to Link $R-$B Versão$R $(head -1 <(grep -Eo "[0-9].[0-9]" $0))$B)\n
+${C}Gera uma lista de links de pacotes do Slackware\na partir de arquivos FILELIST.TXT\n
+${G}Uso:\n\t$Y${0##*/}$C http://www.slackware.com/~alien/multilib/current/${R}FILELIST.TXT$T\n\n"; exit 0
+}
+
+
+# ### Funções de Mensagens e Verificação ###
+
+file_check()
+{
+	CON=0; CNT=0
+	while (( $CON == 0 )); do
+
+		[ ! -e ~/linklist-$CNT ] && {
+			CON=1
+			FILE=~/linklist-$CNT
+		}
+
+		let CNT++
+	done
+}
+
+erro()
+{
+	printf "\n${R}URL Inválida ou Erro de Conexão!$T\n\n" >&2
+	exit 1
+}
+
+
+# ### Verificações ###
+
+[ ! "$(grep FILELIST.TXT$ <<< $1)" ] && {
+	printf "\n${R}Link não Suportado!$T\n\n" >&2
+	exit 1
+}
+
+CHECK=$(curl -Is $1)
+[ -z "$CHECK" ] && erro
+[ -n "$(grep -E "301|404" <<< $CHECK)" ] && erro
+file_check
+
+
+# ### Processo de Conversão ###
+
+sed "s|^[.]*/|$(sed "s/FILELIST.TXT//" <<< $1)|" <(grep -Eo "(/([[:alnum:]]*[[:punct:]]*)*.t[b,g,l,x]z$)" <<< $(w3m -dump $1)) > $FILE
+printf "\n${G}Processo Concluído !$T\n\n"
+exit 0

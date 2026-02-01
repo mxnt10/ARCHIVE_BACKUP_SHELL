@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# Debian build script for themepack2background
+
+# Copyright 2021 Mauricio Ferrari <m10ferrari1200@gmail.com>
+# All rights reserved.
+
+PRGNAM=themepack2background
+VERSION=${VERSION:-3.2}
+RELEASE=${RELEASE:-2}
+
+ARCH=all
+
+CWD=$PWD
+PKG=/tmp/package-$PRGNAM
+
+set -e
+
+rm -rf $PKG
+mkdir -p $PKG/{DEBIAN,usr/{bin,doc/$PRGNAM-$VERSION}}
+
+cd $PKG
+chown -R root:root .
+chmod -R u+w,go+r-w,a+X-s .
+
+install -D -m 0755 $CWD/general/$PRGNAM $PKG/usr/bin
+install -D -m 0755 $CWD/debian/themepack2deb $PKG/usr/bin
+
+cat $CWD/$PRGNAM.debBuild > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.debBuild
+cp -a $CWD/{LICENSE,INFO} $PKG/usr/doc/$PRGNAM-$VERSION
+
+cat $CWD/debian/control > $PKG/DEBIAN/control
+
+cd $CWD
+dpkg-deb -b $PKG ${PRGNAM}_$VERSION-${RELEASE}_$ARCH.deb
+
+rm -rf $PKG

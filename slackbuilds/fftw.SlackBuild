@@ -1,0 +1,182 @@
+#!/bin/sh
+
+# Copyright 2023 Mauricio Ferrari <m10ferrari1200@gmail.com>
+# All rights reserved.
+
+[ $UID != 0 ] && { echo -e "\nExecute como Root !\n"; exit 1; }
+
+PRGNAM=fftw
+VERSION=3.3.10
+BUILD=${BUILD:-1}
+TAG=${TAG:-_mxnt}
+
+if [ -z "$ARCH" ]; then
+  case "$( uname -m )" in
+    i?86) ARCH=i586 ;;
+    arm*) ARCH=arm ;;
+       *) ARCH=$( uname -m ) ;;
+  esac
+fi
+
+[ -e "../../_PKGS" ] && { mkdir -p ../../_PKGS/$PRGNAM; chown -R 1000:users ../../_PKGS; cd ../../_PKGS/$PRGNAM; } || {
+    mkdir -p PKGS/$PRGNAM; chown -R 1000:users PKGS; cd PKGS/$PRGNAM
+}
+
+CWD=$PWD
+TMP=/tmp/MXNT
+PKG=$TMP/package-$PRGNAM
+LINK=http://www.fftw.org/fftw-3.3.10.tar.gz
+
+if [ "$ARCH" = "i586" ]; then
+	SLKCFLAGS="-O2 -march=i586 -mtune=i686"
+	LIBDIRSUFFIX=""
+elif [ "$ARCH" = "i686" ]; then
+	SLKCFLAGS="-O2 -march=i686 -mtune=i686"
+	LIBDIRSUFFIX=""
+elif [ "$ARCH" = "aarch64" ]; then
+	SLKCFLAGS="-O2"
+	LIBDIRSUFFIX="64"
+elif [ "$ARCH" = "x86_64" ]; then
+	SLKCFLAGS="-O3 -fomit-frame-pointer -malign-double -fstrict-aliasing -ffast-math"
+	LIBDIRSUFFIX="64"
+else
+	SLKCFLAGS="-O2"
+	LIBDIRSUFFIX=""
+fi
+
+set -e
+wget -c $LINK
+rm -rf $TMP
+mkdir -p $PKG/{install,usr/doc/$PRGNAM-$VERSION}
+cd $TMP; tar xvf $CWD/$PRGNAM-$VERSION.tar.?z*
+cd $PRGNAM-$VERSION
+chown -R root:root .
+chmod -R u+w,go+r-w,a+X-s .
+cd ..
+
+NUMJOBS=${NUMJOBS:-" -j$(expr $(nproc) + 1) "}
+
+_build_types=(single double long-double quad)
+
+sed -e 's/3.6.9/3.6.10/' -i $PRGNAM-$VERSION/CMakeLists.txt
+
+mv -v $PRGNAM-$VERSION $PRGNAM-$VERSION-single
+for i in {1..3}; do
+    cp -av $PRGNAM-$VERSION-single $PRGNAM-$VERSION-"${_build_types[$i]}"
+done
+
+_configure=(
+    ./configure
+    --prefix=/usr
+    --libdir=/usr/lib${LIBDIRSUFFIX}
+    --enable-shared
+    --enable-threads
+    --enable-openmp
+    --build=$ARCH-slackware-linux
+)
+
+_configure_single=(
+    --enable-sse
+    --enable-avx
+    --enable-single
+)
+
+_configure_double=(
+    --enable-sse2
+    --enable-avx
+)
+
+_configure_long_double=(
+    --enable-long-double
+)
+
+_configure_quad=(
+    --disable-mpi
+    --enable-quad-precision
+)
+
+_cmake_options=(
+    -D CMAKE_C_FLAGS:STRING="$SLKCFLAGS"
+    -D CMAKE_CXX_FLAGS:STRING="$SLKCFLAGS"
+    -B build
+    -S $PRGNAM-$VERSION-$_build_types
+    -D CMAKE_INSTALL_PREFIX=/usr
+    -D CMAKE_INSTALL_LIBDIR=/usr/lib${LIBDIRSUFFIX}
+    -D CMAKE_BUILD_TYPE=None
+    -D ENABLE_OPENMP=ON
+    -D ENABLE_THREADS=ON
+    -D ENABLE_FLOAT=ON
+    -D ENABLE_LONG_DOUBLE=ON
+    -D ENABLE_QUAD_PRECISION=ON
+    -D ENABLE_SSE=ON
+    -D ENABLE_SSE2=ON
+    -D ENABLE_AVX=ON
+    -D ENABLE_AVX2=ON
+)
+
+cmake "${_cmake_options[@]}"
+sed -e 's|\(IMPORTED_LOCATION_NONE\).*|\1 "/usr/lib/libfftw3.so.3"|' -i build/FFTW3LibraryDepends.cmake
+
+  export F77='gfortran'
+  export CFLAGS+=" $SLKCFLAGS"
+  export CXXFLAGS+=" $SLKCFLAGS"
+
+  for _name in "${_build_types[@]}"; do
+    (
+      cd $PRGNAM-$VERSION-$_name
+      case $_name in
+        single)
+        "${_configure[@]}" "${_configure_single[@]}"
+        ;;
+        double)
+        "${_configure[@]}" "${_configure_double[@]}"
+        ;;
+        long-double)
+        "${_configure[@]}" "${_configure_long_double[@]}"
+        ;;
+        quad)
+        "${_configure[@]}" "${_configure_quad[@]}"
+        ;;
+      esac
+      sed -i -e 's/ -shared / -Wl,-O1,--as-needed\0/g' libtool
+    )
+  done
+
+  for _name in "${_build_types[@]}"; do
+    make -C $PRGNAM-$VERSION-$_name $NUMJOBS
+  done
+
+for _name in "${_build_types[@]}"; do
+    make DESTDIR="$PKG" install -C $PRGNAM-$VERSION-$_name
+done
+
+install -vDm 644 $PRGNAM-$VERSION-$_build_types/{AUTHORS,ChangeLog,NEWS,README,TODO} -t "$PKG/usr/doc/$PRGNAM-$VERSION"
+install -vDm 644 build/FFTW3LibraryDepends.cmake -t "$PKG/usr/lib${LIBDIRSUFFIX}/cmake/fftw3/"
+
+echo "    |-----handy-ruler------------------------------------------------------|
+fftw: fftw (Fastest Fourier Transform in the West)
+fftw:
+fftw: FFTW is a free collection of fast C routines for computing the
+fftw: Discrete Fourier Transform in one or more dimensions.  It includes
+fftw: complex, real, symmetric, and parallel transforms, and can handle
+fftw: arbitrary array sizes efficiently.  FFTW is typically faster than
+fftw: other publically-available FFT implementations, and is even
+fftw: competitive with vendor-tuned libraries.
+fftw:
+fftw: Homepage: http://www.fftw.org/
+fftw:" > $PKG/install/slack-desc
+
+cd $PKG; /sbin/makepkg -l y -c n $CWD/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+chown -R 1000:users $CWD/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+rm -rf $TMP
+
+cd $CWD
+[ ${TIME:-0} != 0 ] && TIME="-t $TIME" || TIME=
+if [ "${INST:-no}" = "yes" ]; then
+	OPTION=y
+else
+	read $TIME -p "O pacote já pode ser instalado? (y/n) (default=n)" OPTION
+fi
+case "$OPTION" in
+	y|Y) /sbin/upgradepkg --install-new --reinstall $PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz ;;
+esac; exit 0

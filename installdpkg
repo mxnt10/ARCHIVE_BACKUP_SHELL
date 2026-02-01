@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# InstallDPKG - Versão 2.0
+# By Mauricio Ferrari - Nova Trento/SC - 28/08/2020.
+
+LD=$(pwd)
+NL=${NL:-/dev/null}
+TM=${TM:-temp}
+
+noroot(){
+	echo -e '\033[1;31m
+ _   _         ____             _     _ 
+| \ | | ___   |  _ \ ___   ___ | |_  | |
+|  \| |/ _ \  | |_) / _ \ / _ \| __| | |
+| |\  | (_) | |  _ < (_) | (_) | |_  |_|
+|_| \_|\___/  |_| \_\___/ \___/ \__| (_)
+
+\033[0m'
+	exit 1
+}
+
+nodeb(){
+	echo -e '\033[1;31m'
+	echo O pacote $DEB não é um pacote Debian!
+	echo -e '\033[0m'
+	exit 1
+
+}
+
+info(){
+	echo -e '\033[1;34m'
+	echo $0
+	echo -e '\033[1;37m
+Uso: \033[1;32minstalldpkg \033[1;31m<c> \033[1;32mpacote_1.0-1_all.deb
+\033[0m'
+	exit 0
+}
+
+[[ $UID != 0 ]] && noroot
+[[ $1  = ""  ]] && info
+[[ $1  = c   ]] && IN=$2
+[[ $1 != c   ]] && IN=$1
+[[ $IN = ""  ]] && info
+
+for DEB in $IN ; do
+	[[ ! `ls $DEB | grep .deb` ]] && nodeb
+	FILE=$( ls $DEB | sed 's/.deb//' )
+	mkdir $TM 2> $NL
+	cp $DEB $TM
+	cd $TM
+	ar x $DEB 2> $NL
+	cd $LD
+	[[ -f "$TM/data.tar.gz"   ]] && mv $TM/data.tar.gz $FILE.tgz
+	[[ -f "$TM/data.tar.xz"   ]] && mv $TM/data.tar.xz $FILE.txz
+	[[ -f "$TM/data.tar.bz2"  ]] && mv $TM/data.tar.bz2 $FILE.tbz
+	[[ -f "$TM/data.tar.lzma" ]] && mv $TM/data.tar.lzma $FILE.tlz
+	[[ $1 != c ]] && upgradepkg --install-new $FILE.t?z
+	rm -r $TM
+	exit 0
+done

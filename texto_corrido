@@ -1,0 +1,48 @@
+#!/bin/bash
+
+text=(
+    "Linux é um sistema"
+    "livre e poderoso."
+    "É baseado no Unix"
+    "e muito seguro."
+    "Diversos usuários"
+    "preferem o Linux."
+    "Ele é confiável e"
+    "também flexível."
+    "É usado em servidores,"
+    "desktops e robôs."
+    "Distribuições há"
+    "para todo gosto."
+    "Ubuntu é famoso,"
+    "Debian é estável,"
+    "Arch é avançado,"
+    "Fedora é moderno."
+    "Linux respeita a"
+    "liberdade do uso."
+    "Código aberto é"
+    "a sua essência."
+    "Atualizações são"
+    "frequentes e boas."
+    "A comunidade é"
+    "forte e unida."
+    "Programadores o"
+    "amam de verdade."
+    "Comandos no shell"
+    "ajudam demais."
+    "Linux é leve e"
+    "roda até em PC velho"
+    "Experimente você"
+    "também o Linux."
+    "Você vai gostar!"
+)
+
+declare -i i=0
+
+while :
+do
+    test $i -eq 29 && exit 0
+    clear
+    printf "%s\n" "${text[@]:$i:5}"
+    i+=1
+    sleep 1
+done

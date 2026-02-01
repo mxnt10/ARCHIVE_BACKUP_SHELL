@@ -1,0 +1,328 @@
+#!/bin/bash
+
+## ### README - PT_BR ### ######################################################
+#                                                                              #
+# themepack2background v3.2 - Conversão de arquivos de tema do Windows         #
+# themepack e deskthemepack para pacotes do Linux deb, rpm e txz.              #
+#                                                                              #
+# By Mauricio Ferrari                                                          #
+#                                                                              #
+#                                                                              #
+# Descrição:                                                                   #
+#                                                                              #
+# Esse software tem como objetivo de reutilizar os arquivos de tema do Windows #
+# themepack do descontinuado Windows 7, para transformá-los em pacotes úteis   #
+# de instalação de Wallpapers para o Linux.                                    #
+#                                                                              #
+# Os pacotes deskthemepack do Windows 8, 8.1 e 10, por ter a mesmo formato de  #
+# compactação "cab" e por ter sua estrutura similar, também poderão ser        #
+# convertidos em pacotes para serem instalados no Linux.                       #
+#                                                                              #
+#                                                                              #
+# Todos os Recursos:                                                           #
+#                                                                              #
+# themepack2background - Extrai as imagens dos pacotes (desk)themepack e       #
+#                        instala as imagens diretamente nos diretórios dos     #
+#                        backgrounds das interfaces DDE, GNOME, KDE, MATE      #
+#                        e XFCE.                                               #
+#                                                                              #
+# themepack2deb - Converte pacotes (desk)themepack em pacotes deb.             #
+# themepack2rpm - Converte pacotes (desk)themepack em pacotes rpm.             #
+# themepack2txz - Converte pacotes (desk)themepack em pacotes txz.             #
+#                                                                              #
+# Sintaxe:                                                                     #
+#                                                                              #
+# themepack2background package.themepack                                       #
+# themepack2deb package.themepack                                              #
+# themepack2rpm package.themepack                                              #
+# themepack2txz package.themepack                                              #
+#                                                                              #
+# Parâmetros:                                                                  #
+#                                                                              #
+#     --default       : Suporte ao KDE e o XFCE por padrão.                    #
+#     --enable-dde    : Habilitar suporte ao DDE.                              #
+#     --enable-mate   : Habilitar suporte ao MATE.                             #
+#     --enable-gnome  : Habilitar suporte ao GNOME.                            #
+#     --disable-dde   : Desabilitar suporte ao DDE.                            #
+#     --disable-mate  : Desabilitar suporte ao MATE.                           #
+#     --disable-gnome : Desabilitar suporte ao GNOME.                          #
+#                                                                              #
+# Todas as DEs estão ativadas por padrão.                                      #
+#                                                                              #
+############################ ### Copyleft 2021  ### ############################
+
+
+## ### README - EN_US ### ######################################################
+#                                                                              #
+# themepack2background v3.2 - Conversion of Windows theme files themepack      #
+# and deskthemepack for Linux packages deb, rpm e txz.                         #
+#                                                                              #
+# By Mauricio Ferrari                                                          #
+#                                                                              #
+#                                                                              #
+# Description:                                                                 #
+#                                                                              #
+# This software has as objective reuse Windows theme files themepack of        #
+# discontinued Windows 7, to transform them into useful wallpaper              #
+# installation packages for Linux.                                             #
+#                                                                              #
+# The packages deskthemepack of the Windows 8, 8.1 e 10, for having the same   #
+# compression format "cab" and for having a similar structure, also may be     #
+# converted into packages to be installed on Linux.                            #
+#                                                                              #
+#                                                                              #
+# All Resources:                                                               #
+#                                                                              #
+# themepack2background - Extracts the images from packages (desk)themepack     #
+#                        and install the images directly in the background     # 
+#                        directories of the DDE, GNOME, KDE, MATE and XFCE     #
+#                        interfaces.                                           #
+#                                                                              #
+# themepack2deb - Convert packages (desk)themepack in packages deb.            #
+# themepack2rpm - Convert packages (desk)themepack in packages rpm.            #
+# themepack2txz - Convert packages (desk)themepack in packages txz.            #
+#                                                                              #
+# Sintax:                                                                      #
+#                                                                              #
+# themepack2background package.themepack                                       #
+# themepack2deb package.themepack                                              #
+# themepack2rpm package.themepack                                              #
+# themepack2txz package.themepack                                              #
+#                                                                              #
+# Parameters:                                                                  #
+#                                                                              #
+#     --default       : KDE and XFCE support by default.                       #
+#     --enable-dde    : Enable DDE support.                                    #
+#     --enable-mate   : Enable MATE support.                                   #
+#     --enable-gnome  : Enable GNOME support.                                  #
+#     --disable-dde   : Disable DDE support.                                   #
+#     --disable-mate  : Disable MATE support.                                  #
+#     --disable-gnome : Disable GNOME support.                                 #
+#                                                                              #
+# All DEs are enabled by default.                                              #
+#                                                                              #
+############################ ### Copyleft 2021  ### ############################
+
+
+# ### Variables for package generate. ###
+
+cwd=$PWD
+arch=all
+version=${version:-1.0}
+revision=${revision:-1}
+
+
+# ### Default values. ###
+
+DDE=enable
+MATE=enable
+GNOME=enable
+
+
+# ### Info function. ###
+
+info_view() 
+{
+	: "$( head -105 $0 )"; : "${_//\# /}"; : "${_/!\/bin\/bash/}"; echo -e "${_//\#/}\n"
+	exit 0
+}
+
+
+# ### Add package name in the names for image files. ###
+
+define_name()
+{
+	cd $default_dir
+	for oldname in *; do
+		mv $oldname $name-$oldname
+	done
+}
+
+
+# ### Generate control file. ###
+
+control_gen()
+{
+echo "Package: $name-wall
+Version: $version-$revision
+Architecture: $arch
+Priority: extra
+Section: custom
+Maintainer: Mauricio Ferrari <m10ferrari1200@gmail.com>
+Description: Wallpaper for Debian/Ubuntu family.
+ Package created in $distro.
+ Gererated from $file, by ${0##*/}." > $pkg/DEBIAN/control
+}
+
+
+# ### Generate postinst script. ###
+
+postinst_gen()
+{
+
+	kdedir=/usr/share/wallpapers
+
+	[ "$DDE" == "enable" ] && {
+		kdedir+=/deepin
+		mkdir -p $pkg/$kdedir
+	}
+
+	echo "#!/bin/bash
+
+cd $kdedir
+for img in /usr/share/xfce4/backdrops/$name*; do
+	ln -s \"\$img\" .
+done
+" > $pkg/DEBIAN/postinst
+
+[ "$GNOME" == "enable" ] && echo "cd /usr/share/backgrounds/gnome/$name
+
+for img in /usr/share/xfce4/backdrops/$name*; do
+	ln -s \"\$img\" .
+done
+
+echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE wallpapers SYSTEM \"gnome-wp-list.dtd\">
+<wallpapers>' > /usr/share/gnome-background-properties/gnome-$name.xml
+
+for img in *; do
+echo \"  <wallpaper deleted=\\\"false\\\">
+    <name>\$img</name>
+    <filename>/usr/share/backgrounds/gnome/$name/\$img</filename>
+    <pcolor>#27587E</pcolor>
+    <scolor>#627F5A</scolor>
+    <options>zoom</options>
+  </wallpaper>\" >> /usr/share/gnome-background-properties/gnome-$name.xml
+done
+
+echo '</wallpapers>' >> /usr/share/gnome-background-properties/gnome-$name.xml
+" >> $pkg/DEBIAN/postinst
+
+[ "$MATE" == "enable" ] && echo "cd /usr/share/backgrounds/mate/$name
+
+for img in /usr/share/xfce4/backdrops/$name*; do
+	ln -s \"\$img\" .
+done
+
+echo '<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE wallpapers SYSTEM \"mate-wp-list.dtd\">
+<wallpapers>' > /usr/share/mate-background-properties/mate-$name.xml
+
+for img in *; do
+echo \"  <wallpaper deleted=\\\"false\\\">
+    <name>\$img</name>
+    <filename>/usr/share/backgrounds/mate/$name/\$img</filename>
+    <pcolor>#27587E</pcolor>
+    <scolor>#627F5A</scolor>
+    <options>zoom</options>
+  </wallpaper>\" >> /usr/share/mate-background-properties/mate-$name.xml
+done
+
+echo '</wallpapers>' >> /usr/share/mate-background-properties/mate-$name.xml
+" >> $pkg/DEBIAN/postinst
+
+echo "cd /usr/share/backgrounds/xfce
+for img in /usr/share/xfce4/backdrops/$name*; do
+	ln -s \"\$img\" .
+done
+
+exit" >> $pkg/DEBIAN/postinst
+	chmod 0755 $pkg/DEBIAN/postinst
+}
+
+
+# ### Create DEB package. ###
+
+create_deb()
+{
+	cd $cwd
+	dpkg-deb -b $pkg ${name}-wall_$version-${revision}_$arch.deb
+	chown -R 1000:users ${name}-wall_$version-${revision}_$arch.deb
+}
+
+
+# ### Detect distro. ###
+
+: "$( grep ^NAME /etc/os-release )"; : "${_#*=}"; distro=${_%%[ ]*}
+[ "$distro" == "" ] && distro=$( uname -s )
+
+
+# ### Function for parameters and arguments mapping. ###
+
+for parms in $@; do
+
+	# ### Detect parameters. ###
+
+	case "$parms" in
+
+		--default)  DDE=disable
+					MATE=disable
+					GNOME=disable ;;
+
+		--enable-dde) DDE=enable ;;
+		--enable-mate) MATE=enable ;;
+		--enable-gnome) GNOME=enable ;;
+		--disable-dde) DDE=disable ;;
+		--disable-mate) MATE=disable ;;
+		--disable-gnome) GNOME=disable ;;
+		-h|--help) info_view ;;
+	esac
+
+	# ### Detect arguments. ###
+
+	case "$parms" in
+		--*) ;;
+		  *) args+=" $parms"
+	esac
+done
+
+
+# ### Control messages. ###
+
+[ ! "$args" ] && info_view
+
+[ "$UID" != 0 ] && {
+	echo -e "\n\e[31mThe ${0##*/} resouce requires administrative privileges!\e[m\n" >&2
+	exit 1
+}
+
+
+# ### Conversion step. ###
+
+for file in $args; do
+
+	# ### Message for file not found. ###
+
+	[ ! -e $file ] && {
+		echo -e "\n\e[31mThe \"$file\" file was not found!\e[m\n" >&2
+		continue
+	}
+
+	: "${file##*/}"; name="${_%%.*}"
+	pkg=/tmp/package-$name
+	tmp=/tmp/$name
+	default_dir=$pkg/usr/share/xfce4/backdrops/
+	mkdir -p $tmp $pkg/{DEBIAN,usr/share/{backgrounds/xfce,xfce4/backdrops,wallpapers}}
+	[ "$MATE"  == "enable" ] && mkdir -p $pkg/usr/share/{backgrounds/mate/$name,mate-background-properties}
+	[ "$GNOME" == "enable" ] && mkdir -p $pkg/usr/share/{backgrounds/gnome/$name,gnome-background-properties}
+	cabextract -d $tmp $file
+
+	# ### Message for invalid file. ###
+
+	[ "$?" != 0 ] && {
+		echo -e "\n\e[31mThe \"$file\" file is invalid!\e[m\n" >&2
+		rm -rf $tmp $pkg
+		continue
+	}
+
+	mv $tmp/DesktopBackground/* $default_dir
+	define_name
+	chown -R root:root $pkg
+	chmod -R u+w,go+r-w,a+X-s .
+	control_gen
+	postinst_gen
+	create_deb
+	rm -rf $tmp $pkg
+done
+
+exit 0

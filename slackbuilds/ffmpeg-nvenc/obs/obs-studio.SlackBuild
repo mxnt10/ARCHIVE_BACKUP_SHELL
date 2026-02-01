@@ -1,0 +1,331 @@
+#!/bin/sh
+# $Id: obs-studio.SlackBuild,v 1.15 2022/11/06 16:29:29 root Exp root $
+# Copyright 2020, 2021, 2022  Eric Hameleers, Eindhoven, NL
+# All rights reserved.
+#
+#   Permission to use, copy, modify, and distribute this software for
+#   any purpose with or without fee is hereby granted, provided that
+#   the above copyright notice and this permission notice appear in all
+#   copies.
+#
+#   THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESSED OR IMPLIED
+#   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#   IN NO EVENT SHALL THE AUTHORS AND COPYRIGHT HOLDERS AND THEIR
+#   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+#   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+#   USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#   ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+#   OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+#   SUCH DAMAGE.
+# -----------------------------------------------------------------------------
+#
+# Slackware SlackBuild script 
+# ===========================
+# By:          Eric Hameleers <alien@slackware.com>
+# For:         obs-studio
+# Descr:       software for video recording and live streaming
+# URL:         https://obsproject.com/
+# Build needs: 
+# Needs:       libfdk-aac, jack2, mbedtls, vlc, x264
+# Changelog:   
+# 26.0.1-1:    05/oct/2020 by Eric Hameleers <alien@slackware.com>
+#              * Initial build.
+# 26.0.2-1:    06/oct/2020 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 26.0.2-2:    18/oct/2020 by Eric Hameleers <alien@slackware.com>
+#              * Add fdk-aac dependency so that you no longer have to reply
+#                on a custom-built ffmpeg with AAC encoder support.
+# 26.0.2-3:    26/nov/2020 by Eric Hameleers <alien@slackware.com>
+#              * Rebuilt against updated libraries in -current.
+# 26.1.0-1:    29/dec/2020 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 26.1.1-1:    08/jan/2021 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 26.1.1-2:    10/feb/2021 by Eric Hameleers <alien@slackware.com>
+#              * Rebuilt against new ImageMagick in -current.
+# 27.0.1-1:    23/jun/2021 by Eric Hameleers <alien@slackware.com>
+#              * Update. Disable the obs-browser since that requires
+#                CEF (Chromium Embedded Framework). Don't explicitly link
+#                to ImageMagick since the developer removed support for it.
+# 27.1.3-1:    13/oct/2021 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 27.2.1-1:    27/feb/2022 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 28.0.3-1:    13/oct/2022 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 28.1.2-1:    06/nov/2022 by Eric Hameleers <alien@slackware.com>
+#              * Update.
+# 
+# Run 'sh obs-studio.SlackBuild' to build a Slackware package.
+# The package (.t?z) and .txt file as well as build logs are created in /tmp .
+# Install the package using 'installpkg' or 'upgradepkg --install-new'.
+#
+# -----------------------------------------------------------------------------
+
+PRGNAM=obs-studio
+VERSION=${VERSION:-28.1.2}
+BUILD=${BUILD:-1}
+NUMJOBS=${NUMJOBS:-" -j$(nproc) "}
+TAG=${TAG:-alien}
+
+DOCS="AUTHORS COMMITMENT CONTRIBUTING.rst COPYING INSTALL README.rst"
+
+# Where do we look for sources?
+SRCDIR=$(cd $(dirname $0); pwd)
+
+# Place to build (TMP) package (PKG) and output (OUTPUT) the program:
+TMP=${TMP:-/tmp/build}
+PKG=$TMP/package-$PRGNAM
+OUTPUT=${OUTPUT:-/tmp}
+
+SOURCE[0]="$SRCDIR/${PRGNAM}-${VERSION}.tar.gz"
+SRCURL[0]="https://github.com/obsproject/${PRGNAM}/archive/${VERSION}.tar.gz"
+
+# Use the src_checkout() function if no downloadable tarball exists.
+src_checkout() {
+  # Param #1 : index in the SOURCE[] array.
+  # Param #2 : full path to where SOURCE[$1] tarball should be created.
+  # Determine the tarball extension:
+  PEXT=$(echo "${2}" | sed -r -e 's/.*[^.].(tar.xz|tar.gz|tar.bz2|tgz).*/\1/')
+  case "$PEXT" in
+    "tar.xz") TARCOMP="J" ;;
+    "tar.gz") TARCOMP="z" ;;
+    "tgz") TARCOMP="z" ;;
+    "tar.bz2") TARCOMP="j" ;;
+    *) echo "Archive can only have extension 'tar.xz', '.tar.gz' '.tar.bz2' or '
+.tgz'" ; exit 1 ;;
+  esac
+  # Determine the directory name to create for the archive root:
+  PBASE=$(basename ${2} .${PEXT})
+  # Determine the directory where we create our checkout:
+  CODIR=$(dirname ${2})
+  case ${1} in
+  1) GITURI="https://github.com/obsproject/obs-vst.git"
+     BRANCH="master"
+     RETDIR=$(pwd)
+     mkdir -p $CODIR/${PRGNAM}_temp_checkout_$$ \
+       && cd $CODIR/${PRGNAM}_temp_checkout_$$
+     mkdir ${PBASE} \
+       && cd ${PBASE} \
+     && \
+     if [ "$VERSION" = "HEAD" -o "$VERSION" = "master" ]; then
+       # Checkout without downloading version history (fast!):
+       echo "Checking out HEAD from '$GITURI':"
+       # If VERSION was "HEAD" we still want a date to appear in the pkgname:
+       VERSION=$(date +%Y%m%d)
+       git clone --depth=1 ${GITURI} .
+     else
+       # Checkout code from a certain branch and/or date; this will take a
+       # long time because we have to clone the complete git-repository first:
+       echo "Checking out $BRANCH at date $VERSION from '$GITURI':"
+       git clone ${GITURI} . \
+         && git checkout $BRANCH \
+         && git checkout $(git rev-list -n 1 --before="$(date -d $VERSION)" $BRANCH)
+     fi \
+       && chown -R root:root . \
+       && cd .. \
+       && tar --exclude .git -${TARCOMP}cf ${2} ${PBASE}
+     cd $RETDIR
+     rm -rf $CODIR/${PRGNAM}_temp_checkout_$$ || true
+     ;;
+  *) # Do nothing
+     ;;
+  esac
+}
+
+##
+## --- with a little luck, you won't have to edit below this point --- ##
+##
+
+# Automatically determine the architecture we're building on:
+if [ -z "$ARCH" ]; then
+  case "$(uname -m)" in
+    i?86) ARCH=i586 ;;
+    arm*) readelf /usr/bin/file -A | egrep -q "Tag_CPU.*[4,5]" && ARCH=arm || ARCH=armv7hl ;;
+    # Unless $ARCH is already set, use uname -m for all other archs:
+    *) ARCH=$(uname -m) ;;
+  esac
+  export ARCH
+fi
+# Set CFLAGS/CXXFLAGS and LIBDIRSUFFIX:
+case "$ARCH" in
+  i?86)      SLKCFLAGS="-O2 -march=${ARCH} -mtune=i686"
+             SLKLDFLAGS=""; LIBDIRSUFFIX=""
+             ;;
+  x86_64)    SLKCFLAGS="-O2 -fPIC"
+             SLKLDFLAGS="-L/usr/lib64"; LIBDIRSUFFIX="64"
+             ;;
+  armv7hl)   SLKCFLAGS="-O2 -march=armv7-a -mfpu=vfpv3-d16"
+             SLKLDFLAGS=""; LIBDIRSUFFIX=""
+             ;;
+  *)         SLKCFLAGS=${SLKCFLAGS:-"-O2"}
+             SLKLDFLAGS=${SLKLDFLAGS:-""}; LIBDIRSUFFIX=${LIBDIRSUFFIX:-""}
+             ;;
+esac
+
+case "$ARCH" in
+    arm*)    TARGET=$ARCH-slackware-linux-gnueabi ;;
+    *)       TARGET=$ARCH-slackware-linux ;;
+esac
+
+# Exit the script on errors:
+set -e
+trap 'echo "$0 FAILED at line ${LINENO}" | tee $OUTPUT/error-${PRGNAM}.log' ERR
+# Catch unitialized variables:
+set -u
+P1=${1:-1}
+
+# Save old umask and set to 0022:
+_UMASK_=$(umask)
+umask 0022
+
+# Create working directories:
+mkdir -p $OUTPUT          # place for the package to be saved
+mkdir -p $TMP/tmp-$PRGNAM # location to build the source
+mkdir -p $PKG             # place for the package to be built
+rm -rf $PKG/*             # always erase old package's contents
+rm -rf $TMP/tmp-$PRGNAM/* # remove the remnants of previous build
+rm -rf $OUTPUT/{checkout,configure,make,install,error,makepkg,patch}-$PRGNAM.log
+                          # remove old log files
+
+# Source file availability:
+for (( i = 0; i < ${#SOURCE[*]}; i++ )) ; do
+  if ! [ -f ${SOURCE[$i]} ]; then
+    echo "Source '$(basename ${SOURCE[$i]})' not available yet..."
+    # Check if the $SRCDIR is writable at all - if not, download to $OUTPUT
+    [ -w "$SRCDIR" ] || SOURCE[$i]="$OUTPUT/$(basename ${SOURCE[$i]})"
+    if [ -f ${SOURCE[$i]} ]; then echo "Ah, found it!"; continue; fi
+    if ! [ "x${SRCURL[$i]}" == "x" ]; then
+      echo "Will download file to $(dirname $SOURCE[$i])"
+      wget --no-check-certificate -nv -T 20 -O "${SOURCE[$i]}" "${SRCURL[$i]}" || true
+      if [ $? -ne 0 -o ! -s "${SOURCE[$i]}" ]; then
+        echo "Fail to download '$(basename ${SOURCE[$i]})'. Aborting the build."
+        mv -f "${SOURCE[$i]}" "${SOURCE[$i]}".FAIL
+        exit 1
+      fi
+    else
+      # Try if we have a SVN/CVS download routine for ${SOURCE[$i]}
+      echo "Will checkout sources to $(dirname $SOURCE[$i])"
+      src_checkout $i "${SOURCE[$i]}" \
+        2>&1 > $OUTPUT/checkout-$(basename ${SOURCE[$i]}).log
+    fi
+    if [ ! -f "${SOURCE[$i]}" -o ! -s "${SOURCE[$i]}" ]; then
+      echo "File '$(basename ${SOURCE[$i]})' not available. Aborting the build."
+      exit 1
+    fi
+  fi
+done
+
+if [ "$P1" == "--download" ]; then
+  echo "Download complete."
+  exit 0
+fi
+
+# --- PACKAGE BUILDING ---
+
+echo "++"
+echo "|| $PRGNAM-$VERSION"
+echo "++"
+
+cd $TMP/tmp-$PRGNAM
+echo "Extracting the source archive(s) for $PRGNAM..."
+for (( i = 0; i < ${#SOURCE[*]}; i++ )) ; do
+  tar -xvf ${SOURCE[$i]}
+done
+cd ${PRGNAM}-${VERSION}
+
+# Patches:
+touch $OUTPUT/patch-${PRGNAM}.log
+# Fix loading Python binary modules,
+# see https://github.com/obsproject/obs-studio/issues/2222
+cat $SRCDIR/patches/obs-studio_load_python_binmods.patch \
+  | patch -p1 --verbose 2>&1 | tee -a $OUTPUT/patch-${PRGNAM}.log
+# Don't falter over irrelevant missing submoduls in the source tree:
+cat $SRCDIR/patches/obs-studio_ignore_unused_submodules.patch \
+  | patch -p1 --verbose 2>&1 | tee -a $OUTPUT/patch-${PRGNAM}.log
+
+chown -R root:root .
+chmod -R u+w,go+r-w,a+rX-st .
+
+echo Building ...
+mkdir -p build-${PRGNAM}
+cd build-${PRGNAM}
+  cmake .. \
+    -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_C_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=lib${LIBDIRSUFFIX} \
+    -DOBS_MULTIARCH_SUFFIX=${LIBDIRSUFFIX} \
+    -DOBS_VERSION_OVERRIDE="$VERSION" \
+    -DSTATIC_MBEDTLS=OFF \
+    -DWITH_RTMPS=ON \
+    -DUNIX_STRUCTURE=ON \
+    -DENABLE_AJA=OFF \
+    -DENABLE_BROWSER=OFF \
+    -DENABLE_JACK=ON \
+    -DENABLE_LIBFDK=ON \
+    -DENABLE_NEW_MPEGTS_OUTPUT=OFF \
+    -DENABLE_SCRIPTING_LUA=OFF \
+    -DENABLE_VLC=ON \
+    -DENABLE_VST=ON \
+    2>&1 | tee $OUTPUT/configure-${PRGNAM}.log
+  make $NUMJOBS 2>&1 | tee $OUTPUT/make-${PRGNAM}.log
+  make DESTDIR=$PKG install 2>&1 | tee $OUTPUT/install-${PRGNAM}.log
+cd -
+
+# Add this to the doinst.sh:
+mkdir -p $PKG/install
+cat <<EOINS >> $PKG/install/doinst.sh
+# Update the desktop database:
+if [ -x usr/bin/update-desktop-database ]; then
+  chroot . /usr/bin/update-desktop-database usr/share/applications > /dev/null 2>&1
+fi
+
+# Update hicolor theme cache:
+if [ -d usr/share/icons/hicolor ]; then
+  if [ -x /usr/bin/gtk-update-icon-cache ]; then
+    chroot . /usr/bin/gtk-update-icon-cache -f -t usr/share/icons/hicolor 1> /dev/null 2> /dev/null
+  fi
+fi
+
+# Update the mime database:
+if [ -x usr/bin/update-mime-database ]; then
+  chroot . /usr/bin/update-mime-database usr/share/mime >/dev/null 2>&1
+fi
+
+EOINS
+
+# Add documentation:
+mkdir -p $PKG/usr/doc/$PRGNAM-$VERSION
+cp -a $DOCS $PKG/usr/doc/$PRGNAM-$VERSION || true
+cat $SRCDIR/$(basename $0) > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.SlackBuild
+chown -R root:root $PKG/usr/doc/$PRGNAM-$VERSION
+find $PKG/usr/doc -type f -exec chmod 644 {} \;
+
+# Strip binaries (if any):
+find $PKG | xargs file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
+
+# Add a package description:
+mkdir -p $PKG/install
+cat $SRCDIR/slack-desc > $PKG/install/slack-desc
+cat $SRCDIR/slack-required > $PKG/install/slack-required
+
+# Build the package:
+cd $PKG
+makepkg --linkadd y --chown n $OUTPUT/${PRGNAM}-${VERSION}-${ARCH}-${BUILD}${TAG}.${PKGTYPE:-txz} 2>&1 | tee $OUTPUT/makepkg-${PRGNAM}.log
+cd $OUTPUT
+md5sum ${PRGNAM}-${VERSION}-${ARCH}-${BUILD}${TAG}.${PKGTYPE:-txz} > ${PRGNAM}-${VERSION}-${ARCH}-${BUILD}${TAG}.${PKGTYPE:-txz}.md5
+cd -
+cat $PKG/install/slack-desc | grep "^${PRGNAM}" > $OUTPUT/${PRGNAM}-${VERSION}-${ARCH}-${BUILD}${TAG}.txt
+cat $PKG/install/slack-required > $OUTPUT/${PRGNAM}-${VERSION}-${ARCH}-${BUILD}${TAG}.dep
+
+# Restore the original umask:
+umask ${_UMASK_}
+

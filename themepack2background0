@@ -1,0 +1,43 @@
+#!/bin/bash
+
+#
+# theme2background - Versão 1.0
+#
+# By Mauricio Ferrari
+#
+# Data: 18/06/2020
+#
+# Requer o cabextract instalado.
+#
+
+noroot(){
+	echo
+	echo ' _   _         ____             _     _ '
+	echo '| \ | | ___   |  _ \ ___   ___ | |_  | |'
+	echo '|  \| |/ _ \  | |_) / _ \ / _ \| __| | |'
+	echo '| |\  | (_) | |  _ < (_) | (_) | |_  |_|'
+	echo '|_| \_|\___/  |_| \_\___/ \___/ \__| (_)'
+	echo
+	echo
+	exit
+}
+
+info(){
+	echo
+	echo "$0"
+	echo
+	echo "Uso: theme2background theme.themepack"
+	echo
+	exit
+}
+
+[[ `id -u` != 0 ]] && noroot
+[[ "$1" = "" ]] && info
+
+for file in $* ; do
+	folder=$( ls $file | cut -d '.' -f1 )
+	mkdir tmp /usr/share/backgrounds/$folder
+	cabextract -d tmp $file
+	mv tmp/D*/* /usr/share/backgrounds/$folder
+	rm -r tmp
+done

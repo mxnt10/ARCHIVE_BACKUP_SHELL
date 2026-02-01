@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# ### Git Key v2.3 - By Mauricio Ferrari - 06/05/2021 ###
+#
+############################################################
+
+[ -z "$1" ] && { printf "\e[33mUse um E-Mail como Parâmetro !\e[m\n\n" >&2; exit 1; }
+
+rm -rf ~/.ssh/id_ed25519*
+ssh-keygen -t ed25519 -C "$1"
+
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+clear; echo -e "\e[32m $(< ~/.ssh/id_ed25519.pub) \e[m\n"
+exit 0

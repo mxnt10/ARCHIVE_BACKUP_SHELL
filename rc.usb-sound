@@ -1,0 +1,32 @@
+#!/bin/bash
+
+NAME="USB Sound"
+USB_DAEMON=/usr/bin/usb-sound
+P=$(grep "$BASH $USB_DAEMON"$ <(ps -ax)); PIDFILE=${P/ \?*/}
+
+sound_start () {
+	[ -z "$1" ] && sound_status >/dev/null && return 0
+	setsid $USB_DAEMON &
+	sleep 0.5
+	echo -e "\e[32m$NAME Started.\e[m"
+}
+
+sound_stop() {
+	sound_status >/dev/null || return 0
+	kill $PIDFILE
+	sleep 0.5
+	echo -e "\e[31m$NAME Stopped.\e[m"
+}
+
+sound_status() {
+	[ -n "$PIDFILE" ] && { MSG="\e[32m$NAME is"; RT=0; } || { MSG="\e[31m$NAME is not"; RT=1; }
+	echo -e "$MSG Running.\e[m"; return $RT
+}
+
+case $1 in
+	start) sound_start ;;
+	stop) sound_stop ;;
+	restart|force-reload) sound_stop; sound_start $1 ;;
+	status) sound_status ;;
+	*)  echo -e "\e[36mUsage: ${0##*/} {start|stop|restart|force-reload|status}\e[m" ;;
+esac; exit 0

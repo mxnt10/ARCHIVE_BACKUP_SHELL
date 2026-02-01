@@ -1,0 +1,166 @@
+#!/bin/bash 
+#
+# InstallDPKG - Versão 1.2
+#
+# Script criado para instalar pacotes do Debian diretamente no Slackware, sem a necessidade de converter os pacotes.
+#
+# Foi utilizado como base o script "deb2tgz" criado por Vitor Borrego, Corroios, Portugal, 2016.
+# Foi incrementado o parâmetro -c com base no script "deb2targz" criado por 
+# John Barrett <john@jbrt.org>, 2014. (03/10/2018).
+#
+# Construção do Script: 26/07/2018
+# Ultima alteração:     26/04/2020
+#
+# Criado por Mauricio Ferrari. Nova Trento, Santa Catarina.
+
+#############################################################################################################################
+
+ ### Primeira etapa. Informação sobre o uso do Script. O ($0) copia a localização do Script.
+
+if [ "$1" = "" ]; then
+	echo
+	echo "$0"
+	echo "InstallDPKG - Versão 1.2"
+	echo
+	echo "	Script criado para instalar pacotes do Debian"
+	echo "	diretamente no Slackware, sem a" 
+	echo "	necessidade de converter os pacotes."
+	echo
+	echo "	Uso: installdpkg <-cu> <pacote.deb>"
+	echo
+	echo "Parâmetros:"
+	echo
+	echo "	-c, Converte os pacotes mas não instala,"
+	echo "	    salvando no diretório onde o <pacote.deb>"
+	echo "	    se encontra."
+	echo
+	echo "	-u, Usa um método que irá instalar o pacote"
+	echo "	    usando um método de Atualização, desinstalando"
+	echo "	    o pacote obsoleto."
+	echo
+	exit 1;
+fi
+
+#############################################################################################################################
+
+ ### Criando o diretório temporário, que será usado no processo de conversão do pacote deb para a instalação.
+
+tempfolder () {
+	if [ -x "$(which mcookie)" ]; then
+		tempd=/tmp/tmp.$(mcookie)
+		mkdir -p -m 0755 $tempd
+	elif [ -x "$(which openssl)" ]; then
+		tempd=/tmp/tmp.$(dd if=/dev/urandom bs=1k count=1 2> /dev/null | openssl dgst -md5)
+		mkdir -p -m 0755 $tempd
+	elif [ -x "$(which md5)" ]; then
+		tempd=/tmp/tmp.$(dd if=/dev/urandom bs=1k count=1 2> /dev/null | md5)
+		mkdir -p -m 0755 $tempd
+	elif [ -x "$(which mktemp)" ]; then
+		tempd=$(mktemp -d)
+		chmod 755 $tempd
+	fi
+
+ ### Aqui o comando a seguir (echo $tempd) deve retornar com o nome do diretório criado para não acusar erro.
+
+	if [ -d $tempd ]; then
+		echo $tempd
+	else
+		echo
+		echo "ERRO: Não foi possível encontrar o mcookie," 
+		echo "      o openssl, ou o md5."
+		echo
+		exit 1;
+	fi
+}
+
+#############################################################################################################################
+
+ ### Função criada para o parâmetro -c que é a parte que faz a conversão, copiando o pacote gerado na pasta home.
+
+convertion () {
+	if [ -f "$tempdir/data.tar.gz" ]; then   ### Conversão do (data.tar.gz).
+		mv $tempdir/data.tar.gz $savedir/$(basename $debfile .deb).tgz
+	fi
+	if [ -f "$tempdir/data.tar.xz" ]; then   ### Conversão do (data.tar.xz).
+		mv $tempdir/data.tar.xz $savedir/$(basename $debfile .deb).txz
+	fi
+	if [ -f "$tempdir/data.tar.bz2" ]; then  ### Conversão do (data.tar.bz2).
+		mv $tempdir/data.tar.bz2 $savedir/$(basename $debfile .deb).tbz
+	fi
+	if [ -f "$tempdir/data.tar.lzma" ]; then ### Conversão do (data.tar.lzma).
+		mv $tempdir/data.tar.lzma $savedir/$(basename $debfile .deb).tlz
+	fi
+	rm -rf $tempdir ### O diretório temporário será excluído.
+}
+
+#############################################################################################################################
+
+ ### Aqui é a parte onde é configurado os parâmetros do script.
+
+ARGS=$(getopt "cu" $* ) ### identificação dos parâmetros inseridos.
+set -- ${ARGS}
+for i; do
+	case "$1" in
+		-u)
+		UPGRADE_PKG="true" ### Parâmetro -u.
+		shift
+		;;
+		-c)
+		CONVERT_PKG="true" ### Parâmetro -c.
+		shift
+		;;
+		--)
+		shift
+		break
+		;;
+	esac
+done
+
+#############################################################################################################################
+
+ ### Parte do script que detecta o pacote debian e realiza a conversão e/ou a instalação do pacote gerado.
+
+for debfile in $* ; do                   ### O debfile são os arquivos *.deb a serem instalados.
+	INST=installpkg                  ### Definindo o comando de instalação.
+	tempdir=$(tempfolder)            ### Criando o diretório temporário.
+	savedir=$(pwd $debfile)          ### Diretório onde o pacote convertido será salvo usando o parâmetro -c.
+	cp $debfile $tempdir 2>/dev/null ### Copiando o pacote *.deb para o diretório temporário.
+	cd $tempdir                      ### Acessando o diretório temporário.
+	ar x $debfile 2> /dev/null       ### Extração do pacote *.deb usando o comando 'ar'.
+	if [ ! $? = 0 ]; then            ### Mensagem exibida em caso de falha na extração.
+		echo
+		echo "ERRO: Ocorreu uma falha ao tentar fazer a extração"
+		echo "      do pacote $debfile."
+		echo
+		echo "      O pacote $debfile é invalido ou está"
+		echo "      corrompido."
+		echo
+		rm -rf $tempdir ### O diretório temporário será excluído.
+		exit 1;
+	fi
+	if [ "$UPGRADE_PKG" = "true" ]; then ### Parâmetro -u.
+		INST="upgradepkg --install-new"
+		#exit 1;
+	fi
+	if [ "$CONVERT_PKG" = "true" ]; then ### Parâmetro -c.
+		convertion
+		exit 1;
+	fi
+	if [ "`basename $0`" = "installdpkg" ]; then     ### Identificação do nome do Pacote.
+		echo -e -n "\033[1;36m"
+		if [ -f "$tempdir/data.tar.gz" ]; then   ### Instalação do (data.tar.gz).
+			mv $tempdir/data.tar.gz $tempdir/$(basename $debfile .deb).tgz && $INST *.tgz
+		fi
+		if [ -f "$tempdir/data.tar.xz" ]; then   ### Instalação do (data.tar.xz).
+			mv $tempdir/data.tar.xz $tempdir/$(basename $debfile .deb).txz && $INST *.txz
+		fi
+		if [ -f "$tempdir/data.tar.bz2" ]; then  ### Instalação do (data.tar.bz2).
+			mv $tempdir/data.tar.bz2 $tempdir/$(basename $debfile .deb).tbz && $INST *.tbz
+		fi
+		if [ -f "$tempdir/data.tar.lzma" ]; then ### Instalação do (data.tar.lzma).
+			mv $tempdir/data.tar.lzma $tempdir/$(basename $debfile .deb).tlz && $INST *.tlz
+		fi
+		echo -e -n "\033[0m"
+	fi
+	rm -rf $tempdir ### O diretório temporário será excluído.
+done

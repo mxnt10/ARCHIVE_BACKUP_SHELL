@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# RPM build script for themepack2background
+
+# Copyright 2021 Mauricio Ferrari <m10ferrari1200@gmail.com>
+# All rights reserved.
+
+mkdir -p ~/rpmbuild
+cp general/themepack2background ~/rpmbuild
+cp rpm/themepack2rpm ~/rpmbuild
+cp LICENSE ~/rpmbuild
+cp INFO ~/rpmbuild
+
+rpmbuild -bb rpm/themepack2background.spec
+
+mv ~/rpmbuild/RPMS/noarch/themepack2background*.rpm .
+rm -r ~/rpmbuild

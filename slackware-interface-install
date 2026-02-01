@@ -1,0 +1,196 @@
+#!/bin/bash 
+
+########################################################################################################################
+
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+ ###                                                                         ###
+ ###                                                                         ###
+ ### Instalador de Interface Gráfica para o Slackware - Versão 1.0           ###
+ ###                                                                         ###
+ ### By Mauricio Ferrari <m10ferrari1200@gmail.com>                          ###
+ ###                                                                         ###
+ ###                                                                         ###
+ ### Data: 24/05/2020                                                        ###
+ ###                                                                         ###
+ ###                                                                         ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+ ###                                                     ###
+ ###                                                     ###
+ ###   Itens Incluídos:                                  ###
+ ###                                                     ###
+ ### - LXDE Desktop.                                     ###
+ ### - LXQT Desktop.                                     ###
+ ### - KDE Plasma 5 Desktop.                             ###
+ ### - Extra: Suporte MultiLIB.                          ###
+ ###                                                     ###
+ ###                                                     ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+
+########################################################################################################################
+#                                       #
+# ### Verificação de Super Usuário. ### #
+#                                       #
+#########################################
+
+noroot(){
+	echo
+	echo ' _   _         ____             _     _ '
+	echo '| \ | | ___   |  _ \ ___   ___ | |_  | |'
+	echo '|  \| |/ _ \  | |_) / _ \ / _ \| __| | |'
+	echo '| |\  | (_) | |  _ < (_) | (_) | |_  |_|'
+	echo '|_| \_|\___/  |_| \_\___/ \___/ \__| (_)'
+	echo
+	echo
+	exit
+}
+
+[[ `id -u` != 0 ]] && noroot
+
+########################################################################################################################
+#               #
+# ### Logo. ### #
+#               #
+#################
+
+echo
+echo ' ______   __  __  __    _   _   _ ____  ___ ____ ___ ___  '
+echo '| __ ) \ / / |  \/  |  / \ | | | |  _ \|_ _/ ___|_ _/ _ \ '
+echo '|  _ \\ V /  | |\/| | / _ \| | | | |_) || | |    | | | | |'
+echo '| |_) || |   | |  | |/ ___ \ |_| |  _ < | | |___ | | |_| |'
+echo '|____/ |_|   |_|  |_/_/   \_\___/|_| \_\___\____|___\___/ '
+echo
+echo
+sleep 1
+
+########################################################################################################################
+#                    #
+# ### Variáveis. ### #
+#                    #
+######################
+
+BT='Instalador de Interface para o'
+TTL='Interfaces para o'
+LINHA='__________________________________________'
+
+SLACK=$( cat /etc/slackware-version )
+VERSION=$( grep '^VERSION=' /etc/os-release | cut -d '=' -f 2 | sed 's/"//g' )
+ARCH=$( uname -m )
+
+FILE=${FILE:-tempfile}
+LOOP=${LOOP:-1}
+
+ARC=slackware64
+DIALOG=whiptail
+TIPO=Interface
+
+FOLDER=$( pwd )
+
+########################################################################################################################
+#                  #
+# ### Funções. ### #
+#                  #
+####################
+
+fim(){
+	rm -f $FILE
+	exit 0
+}
+
+incompativel(){
+	$DIALOG --backtitle "$BT $SLACK $ARCH ( $VERSION ) - v1.0" --title "$TTL $SLACK $ARCH ( $VERSION )" \
+			--msgbox "Sistema sem compatibilidade ( $SLACK $ARCH ) !" 7 60
+	fim
+}
+
+concluido(){
+	$DIALOG --backtitle "$BT $SLACK $ARCH ( $VERSION ) - v1.0" --title "$TTL $SLACK $ARCH ( $VERSION )" \
+			--msgbox "Procedimento bem Sucedido para $TIPO $PACK !" 7 60
+	fim
+}
+
+########################################################################################################################
+#                    #
+# ### Checagens. ### #
+#                    #
+######################
+
+[[ $ARCH = "i?86" ]] && ARCH=${ARCH:-x86}
+
+[[ ! -x `which "$DIALOG" 2> /dev/null` ]] && DIALOG=${DIALOG:-dialog}
+
+[[ "`grep "VERSION_CODENAME" /etc/os-release`" ]] && VERSION=$( grep '^VERSION_CODENAME=' /etc/os-release | cut -d '=' -f 2 )
+
+########################################################################################################################
+#                              #
+# ### Interface Principal. ### #
+#                              #
+################################
+
+while [ $LOOP = 1 ]; do
+	$DIALOG --backtitle "$BT $SLACK $ARCH ( $VERSION ) - v1.0" --title "$TTL $SLACK $ARCH ( $VERSION )" \
+			--menu "\nSelecione uma Interface para o Slackware:\n$LINHA\n" 18 60 8\
+			: "                                        :" \
+			: " -------------------------------------- :" \
+			1 " | Interface: LXDE                    | :" \
+			2 " | Interface: LXQT                    | :" \
+			3 " | Interface: KDE Plasma 5            | :" \
+			4 " | Extra: Suporte MultiLIB ( x86_64 ) | :" \
+			: " -------------------------------------- :" \
+			: "                                        :" 2> $FILE
+
+	STATUS=$?
+	OPTION=$(cat $FILE)
+
+	[[ $STATUS != 0 ]] && fim
+
+	case $OPTION in
+
+		1) ### Instalação do LXDE.
+
+			[[ $ARCH != "x86_64" ]] && ARC=slackware
+			PACK=${PACK:-LXDE}
+			rsync -Hav rsync://ponce.cc/pub/$ARC-$VERSION/lxde/ $FOLDER/lxde/
+			upgradepkg --install-new $FOLDER/lxde/*.t?z
+			concluido
+			;;
+
+		2) ### Instalação do LXQT.
+
+			PACK=${PACK:-LXQT}
+			rsync -Hav rsync://slackware.uk/people/alien/sbrepos/$VERSION/$ARCH/lxqt/ $FOLDER/lxqt/
+			upgradepkg --install-new $FOLDER/lxqt/*.t?z
+			concluido
+			;;
+
+		3) ### Instalação do KDE Plasma 5.
+
+			[[ $VERSION != "14.2" && $VERSION != "current" ]] && incompativel
+			PACK=${PACK:-KDE Plasma 5}
+			rsync -Hav rsync://bear.alienbase.nl/mirrors/alien-kde/$VERSION/latest/$ARCH/ $FOLDER/$ARCH
+			upgradepkg --install-new $FOLDER/$ARCH/deps/telepathy/*.t?z
+			upgradepkg --install-new $FOLDER/$ARCH/deps/*.t?z
+			upgradepkg --install-new $FOLDER/$ARCH/kde/*/*.t?z
+			upgradepkg --install-new $FOLDER/$ARCH/kdei/kde-l10n-pt_BR-*.txz
+			concluido
+			;;
+
+		4) ### Instalação do MultiLIB.
+
+			[[ $ARCH != "x86_64" ]] && incompativel
+			PACK=${PACK:-MultiLIB}
+			TIPO=Suporte
+			rsync -Hav rsync://mirrors.slackware.bg/multilib/$VERSION/ $FOLDER/$VERSION/
+			upgradepkg --install-new $FOLDER/$VERSION/*.t?z
+			upgradepkg --install-new $FOLDER/$VERSION/debug/*.t?z
+			upgradepkg --install-new $FOLDER/$VERSION/$ARC-compat32/*/*.t?z
+			concluido
+			;;
+	esac
+done
+
+########################################################################################################################

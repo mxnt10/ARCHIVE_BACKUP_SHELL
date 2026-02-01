@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# InstallTXZ v1.0 - By Mauricio Ferrari - 13/09/2020
+
+TM=${TM:-temp}
+NL=${NL:-/dev/null}
+
+[[ $UID != 0 ]] && echo -e '\n\033[1;31m Use Root! \n\033[0m' && exit 1
+[[ ! `ls $(pwd) | egrep -w '(tbz|tgz|tlz|txz)'` ]] && echo -e '\n\033[1;31m No Slackware Packages Found! \n\033[0m' && exit 1
+
+mkdir $TM 2> $NL
+
+for F in ${PWD}/*{tbz,tlz,txz}; do
+	mv "$F" "${F%t?z}tgz" 2> $NL
+done
+
+ls $(pwd) | egrep '(tgz)' > $TM/list
+
+for X in `cat $TM/list`; do
+	alien -d $X
+	apt-get install ./$(echo $X | cut -d '-' -f1)*.deb
+done
+
+rm -r $TM
+
+exit 0

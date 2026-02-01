@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Loop Mapeamento USB - By Mauricio Ferrari
+
+STT=0
+
+while :; do
+	L1=$(wc -l < <(lsusb))
+	[ $STT = 1 ] && [[ $L1 > $L2 ]] && mplayer /opt/sounds/NameDiallerStartTone.wav
+	[ $STT = 1 ] && [[ $L1 < $L2 ]] && mplayer /opt/sounds/NameDiallerStopTone.wav
+	STT=1; L2=$L1
+	sleep 1
+done

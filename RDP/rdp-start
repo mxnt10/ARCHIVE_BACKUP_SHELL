@@ -1,0 +1,21 @@
+#!/bin/bash
+
+: "$(grep USER  ${0%/*}/rdp.conf)"; RDP_USER="${_#*=}"
+: "$(grep PASS  ${0%/*}/rdp.conf)"; RDP_PASS="${_#*=}"
+: "$(grep IP    ${0%/*}/rdp.conf)"; RDP_IP="${_#*=}"
+
+FULL_NAME="Microsoft Windows"
+WIN_EXECUTABLE=""
+ICON=""
+
+#LIBGL_ALWAYS_SOFTWARE=1 \
+xfreerdp \
+	/u:"${RDP_USER}" \
+	/p:"${RDP_PASS}" \
+	/v:${RDP_IP}     \
+	+auto-reconnect  \
+	+clipboard       \
+	+home-drive      \
+	-wallpaper       \
+	/dynamic-resolution \
+	/wm-class:"${FULL_NAME}" 2>&1 &

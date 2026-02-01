@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# ### Mem Clean v1.0 - By Mauricio Ferrari - 24/02/2022 ###
+#
+##############################################################
+
+
+[ $UID != 0 ] && {
+	printf "\nRun as Root !\n\n"
+	exit 1
+}
+
+line()
+{
+	for ((I=0; I<$1; I++))
+	{
+		printf '─'
+	}
+	printf '\n'
+}
+
+line 80
+free -m
+line 80
+
+sync
+echo 3 > /proc/sys/vm/drop_caches
+
+swapoff -a && swapon -a
+
+free -m
+line 80
+
+exit 0

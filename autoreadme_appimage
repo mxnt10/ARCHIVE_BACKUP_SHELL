@@ -1,0 +1,54 @@
+#!/bin/bash
+
+CWD="$PWD"
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="${SCRIPT_PATH%/*}"
+TEMPLATE="$SCRIPT_DIR/template.md"
+
+command -v yad &> /dev/null || { echo "Erro: 'yad' não está instalado."; exit 1; }
+
+test -n "$1" && APPIMAGE_PATH="$(realpath "$1")"
+
+test -n "$APPIMAGE_PATH" && test -f "$APPIMAGE_PATH" && {
+    ENTRY_FILENAME="$(basename "$APPIMAGE_PATH")"
+    ENTRY_APPIMAGE_NAME=$(basename "$APPIMAGE_PATH" | sed 's/-[0-9].*//')
+}
+
+TMPDIR=$(mktemp -d)
+cd "$TMPDIR" || exit 1
+
+"$APPIMAGE_PATH" --appimage-extract '*.desktop' > /dev/null 2>&1
+APP_DESCRIPTION=$(grep -m1 '^Comment=' $TMPDIR/squashfs-root/*.desktop | head -1 | cut -d= -f2-)
+
+cd -
+rm -rf "$TMPDIR"
+
+FORM=$(yad --title="Gerador de README - AppImage" \
+  --form \
+  --field="Nome do AppImage":TXT "$ENTRY_APPIMAGE_NAME" \
+  --field="Descrição do AppImage":TXT "$APP_DESCRIPTION" \
+  --field="Nome do arquivo .AppImage (ex: app.AppImage)":TXT "$ENTRY_FILENAME" \
+  --field="Tipo do AppImage:CB" "default_ld_linux!junest!bwrap_proot!proot!flatpak!tarball" \
+  --field="Base do AppImage:CB" "arch linux!debian!flatpak!tarball" \
+  --field="Runtime:CB" "type2runtime!uruntime!uruntime_dwarfs" \
+  --field="GlibC incluída?:CB" "sim!não" \
+  --width=600 \
+  --center)
+
+[ $? -ne 0 ] && exit 0
+
+IFS="|" read -r APPIMAGE_NAME DESC FILENAME TIPO BASE RUNTIME GLIBC <<< "$FORM"
+
+sed -e "s/--APPIMAGE-NAME--/$APPIMAGE_NAME/g" \
+    -e "s/--DESC-APPIMAGE--/$DESC/g" \
+    -e "s/--TIPO--/$TIPO/g" \
+    -e "s/--BASE--/$BASE/g" \
+    -e "s/--GLIBC--/$GLIBC/g" \
+    -e "s/--RUNTIME--/$RUNTIME/g" \
+    -e "s/--APPIMAGE--/$FILENAME/g" \
+    "$TEMPLATE" > "$CWD/README.md"
+
+cp "$SCRIPT_DIR/LICENSE" "$CWD"
+
+yad --title="Sucesso!" --center --width=400 --button=ok --text="✅ README.md gerado com sucesso!"

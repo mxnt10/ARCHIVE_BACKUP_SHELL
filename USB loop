@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Loop Mapeamento USB - By Mauricio Ferrari
+
+STT=0
+
+while :; do
+	L1=$(usbreset | grep ID)
+	[[ $STT = 1 ]] && [[ $L2 != $L1 ]] && echo mudou
+	STT=1
+	L2=$L1
+done 

@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# ### Modules View v1.0 - By Mauricio Ferrari - 06/07/2021 ###
+#
+#################################################################
+
+R='\e[31m'
+G='\e[32m'
+Y='\e[33m'
+B='\e[34m'
+T='\e[m'
+
+printf "$B\nMódulos Carregados no Sistema\n
+${Y}Recursos Habilitados no Kernel:   $G$(wc -l < <(grep '=y' <(zcat /proc/config.gz)))
+${Y}Recursos Carregados como Módulos: $R$(wc -l < <(grep '=m' <(zcat /proc/config.gz)))$T\n\n"
+
+[ "$1" ] && {
+printf "$B\nArquivo .config Personalizado\n
+${Y}Recursos Habilitados no Kernel:   $G$(wc -l < <(grep '=y' <<< $(< $1)))
+${Y}Recursos Carregados como Módulos: $R$(wc -l < <(grep '=m' <<< $(< $1)))$T\n\n"
+}
+
+exit 0
