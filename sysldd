@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# ### SysLDD v2.0 - Procura Binários com Dependências Faltantes - By Mauricio Ferrari - 17/08/2022 ###
+#
+#########################################################################################################
+
+R='\e[31m'
+G='\e[32m'
+Y='\e[33m'
+B='\e[34m'
+T='\e[m'
+
+[ "$1" ] && {
+	VAR=($*)
+	PARM=$*
+} || {
+	VAR=(/{,usr/}{,s}bin/*)
+	PARM=$(echo /{,usr/}{,s}bin/*)
+}
+
+TOT=${#VAR[@]}
+NM=1
+
+for I in $PARM
+{
+	printf "\e]0;[ $NM / $TOT ] Checking Dependencies ...\a"
+	VERIFY=$(ldd $I 2>&-)
+	: "$(grep "not found" <<< $VERIFY)"; NOT=${_//=> not found/}
+	[ "$NOT" ] && printf "\n$G$I$Y: $B($(wc -w <<< $NOT))\n$R$NOT\n"
+	let NM++
+}
+
+printf "$T\n"
+exit 0

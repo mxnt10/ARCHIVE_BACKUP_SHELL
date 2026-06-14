@@ -1,0 +1,88 @@
+#!/bin/bash
+
+########################################################################################################################
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+ ###                                                     ###
+ ### KDE 5 ROOT Fix                                      ###
+ ###                                                     ###
+ ### By Mauricio Ferrari.                                ###
+ ###                                                     ###
+ ### Fonte:                                              ###
+ ###                                                     ###
+ ### https://forum.kde.org/viewtopic.php?t=153655#       ###
+ ###                                                     ###
+ ### Programas:                                          ###
+ ###                                                     ###
+ ### - Dolphin                                           ###
+ ### - Kate                                              ###
+ ### - Kwrite                                            ###
+ ###                                                     ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+########################################################################################################################
+#                                       #
+# ### Verificação de Super Usuário. ### #
+#                                       #
+#########################################
+
+noroot(){
+	echo
+	echo ' _   _         ____             _     _ '
+	echo '| \ | | ___   |  _ \ ___   ___ | |_  | |'
+	echo '|  \| |/ _ \  | |_) / _ \ / _ \| __| | |'
+	echo '| |\  | (_) | |  _ < (_) | (_) | |_  |_|'
+	echo '|_| \_|\___/  |_| \_\___/ \___/ \__| (_)'
+	echo
+	echo
+	exit
+}
+
+[[ `id -u` != 0 ]] && noroot
+
+########################################################################################################################
+#                  #
+# ### Funções. ### #
+#                  #
+####################
+
+BIN=${BIN:-/usr/bin}
+
+DP(){
+    mv $BIN/dolphin $BIN/dolphin-bin
+    echo '#!/bin/bash
+[[ `id -u`  = 0 ]] && pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY KDE_SESSION_VERSION=5 KDE_FULL_SESSION=true dolphin-bin
+[[ `id -u` != 0 ]] && dolphin-bin' | tee $BIN/dolphin
+    chmod 755 $BIN/dolphin
+}
+
+KT(){
+    mv $BIN/kate $BIN/kate-bin
+    echo '#!/bin/bash
+[[ `id -u`  = 0 ]] && pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY KDE_SESSION_VERSION=5 KDE_FULL_SESSION=true kate-bin
+[[ `id -u` != 0 ]] && kate-bin' | tee $BIN/kate
+    chmod 755 $BIN/kate
+}
+
+KR(){
+    mv $BIN/kwrite $BIN/kwrite-bin
+    echo '#!/bin/bash
+[[ `id -u`  = 0 ]] && pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY KDE_SESSION_VERSION=5 KDE_FULL_SESSION=true kwrite-bin
+[[ `id -u` != 0 ]] && kate-bin' | tee $BIN/kwrite
+    chmod 755 $BIN/kwrite
+}
+
+########################################################################################################################
+#                     #
+# ### Instalação. ### #
+#                     #
+#######################
+
+[[ ! -e /usr/bin/dolphin-bin ]] && [[ -e /usr/bin/dolphin ]] && DP
+
+[[ ! -e /usr/bin/kate-bin    ]] && [[ -e /usr/bin/kate    ]] && KT
+
+[[ ! -e /usr/bin/kwrite-bin  ]] && [[ -e /usr/bin/kwrite  ]] && KR
+
+
+

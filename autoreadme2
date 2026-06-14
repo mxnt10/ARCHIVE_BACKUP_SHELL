@@ -1,0 +1,47 @@
+#!/bin/bash
+
+TEMPLATE="template.md"
+OUTPUT="README.md"
+
+APPIMAGE_NAME=$(whiptail --inputbox "Nome do AppImage:" 8 60 --title "Nome do App" 3>&1 1>&2 2>&3)
+DESC=$(whiptail --inputbox "Descrição do AppImage:" 10 60 --title "Descrição" 3>&1 1>&2 2>&3)
+FILENAME=$(whiptail --inputbox "Nome do arquivo .AppImage (ex: app.AppImage):" 8 60 --title "Arquivo" 3>&1 1>&2 2>&3)
+
+TIPO=$(whiptail --title "Tipo de AppImage" --menu "Escolha o tipo:" 15 60 6 \
+"default" "Tradicional (direto)" \
+"junest" "Modo contêiner via Junest" \
+"bwrap_proot" "Modo contêiner via Bubblewrap+proot" \
+"proot" "Modo contêiner via proot puro" \
+"flatpak" "Flatpak empacotado" \
+"tarball" "Base tarball extraída" \
+3>&1 1>&2 2>&3)
+
+BASE=$(whiptail --title "Base do AppImage" --menu "Escolha a base:" 12 60 4 \
+"arch linux" "Base Arch Linux" \
+"debian" "Base Debian" \
+"flatpak" "Flatpak" \
+"tarball" "Base tarball" \
+3>&1 1>&2 2>&3)
+
+RUNTIME=$(whiptail --title "Runtime" --menu "Escolha o runtime:" 12 60 3 \
+"type2runtime" "Runtime padrão AppImage (type2)" \
+"uruntime" "Runtime personalizado (uruntime)" \
+"uruntime_dwarfs" "uruntime com DwarFS" \
+3>&1 1>&2 2>&3)
+
+GLIBC=$(whiptail --title "GlibC incluída?" --menu "A inclusão do glibc está presente?" 10 60 2 \
+"sim" "Sim, a GlibC foi incluída" \
+"não" "Não foi incluída" \
+3>&1 1>&2 2>&3)
+
+# Substituições no template
+sed -e "s/--APPIMAGE-NAME--/$APPIMAGE_NAME/g" \
+    -e "s/--DESC-APPIMAGE--/$DESC/g" \
+    -e "s/--TIPO--/$TIPO/g" \
+    -e "s/--BASE--/$BASE/g" \
+    -e "s/--GLIBC--/$GLIBC/g" \
+    -e "s/--RUNTIME--/$RUNTIME/g" \
+    -e "s/--APPIMAGE--/$FILENAME/g" \
+    "$TEMPLATE" > "$OUTPUT"
+
+whiptail --title "Pronto!" --msgbox "README.md gerado com sucesso!" 8 50

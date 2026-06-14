@@ -1,0 +1,58 @@
+#!/bin/bash
+
+ ### TXZ Sync v1.0 - 24/08/2020 - By Mauricio Ferrari - <m10ferrari1200@gmail.com> ###
+ ### Uso: ./txzsync <clean/rm/ls/cp/0> | Apenas para verificação: ./txzsync        ###
+
+# Configuração Manual
+DR=~/Current1
+DS=~/excluded.log
+RL=1 # default 1
+
+# Constantes A=${A:-B}
+DB=${DB:-/var/cache/packages/*}
+BN=${BN:-/usr/bin}
+NL=${NL:-/dev/null}
+TM=${TM:-temp}
+L1=${L1:-$TM/lst1}
+L2=${L2:-$TM/lst2}
+
+# Finalização do script
+fim(){
+	echo -e "\033[0m"
+	[[ -e $TM ]] && rm -r $TM
+	exit
+}
+
+# Listando ou limpando o cache dos pacotes baixados do apt
+[[ $1 = "ls" ]] || [[ $1 = "rm" ]] && [[ ! `ls -R $DB 2> $NL | grep txz` ]] && echo && echo -e "\033[1;31m Diretório $DB Vazio." && fim
+[[ $1 = "ls" ]] && echo -e "\033[1;37m" && ls -R $DB | grep ".txz" | grep -v ".asc" && fim
+[[ $1 = "rm" ]] && sudo rm -R $DB && echo && echo -e "\033[1;34m Cache slackpkg redefinido." && fim
+
+# Verificação de editores para exibição do log
+VW=xed && [[ ! -e $BN/$VW ]] && VW=pluma && [[ ! -e $BN/$VW ]] && VW=gedit && [[ ! -e $BN/$VW ]] && VW=kate && [[ ! -e $BN/$VW ]] && VW=leafpad && [[ ! -e $BN/$VW ]] && VW=0
+
+# Controle de erro
+[[ ! -e "$DR" ]] && echo && echo -e "\033[1;31m O diretório $DR não existe." && fim
+[[ `ls --ignore=*.txz $DR` ]] && echo && echo -e "\033[1;31m O diretório $DR deveria conter só arquivos TXZ." && fim
+
+# Backup dos pacotes instalados no sistema se $1 não for 0
+[[ $1 != 0 ]] && [[ $2 != 0 ]] && [[ `ls -R $DB 2> $NL | grep txz` ]] && echo -e "\033[1;34m" && find -H $DB -type f -print0 | xargs -0 -L1 -i cp -v {} $DR | cut -d "'" -f 2 | sed "s/$/ copiado/g" | grep -v ".asc" && rm $DR/*.asc 2> $NL
+[[ $1 = "cp" ]] && [[ ! `ls -R $DB 2> $NL | grep txz` ]] && echo && echo -e "\033[1;33m Nada Copiado." && fim
+[[ $1 = "cp" ]] && fim
+
+# Criar o diretório temporário e limpar o log obsoleto se RL=1
+mkdir $TM 2> $NL && [[ $RL = 1 ]] && rm $DS 2> $NL
+
+# Gerando as listas de comparação.
+ls /var/log/packages 1> $L1
+ls $DR | sed -e 's|\.txz||g' > $L2
+
+# Comparando as listas e excluindo os pacotes obsoletos caso parâmetro clean for usado.
+for x in `cat $L2`; do
+    [[ $(cat $L1 | grep -w $x) = "" ]] && echo $x >> $DS && [[ $1 = "clean" ]] && rm $DR/$x.txz
+done
+
+# Visualizando o novo log se possível
+[[ ! `cat $DS 2> $NL` ]] && echo && echo -e "\033[1;33m Nenhum log foi gerado. Não há pacotes obsoletos." && fim
+[[ $VW  = 0 ]] && echo && echo -e "\033[1;33m Não foi possível encontrar um editor para visualizar o log." && fim
+[[ $VW != 0 ]] && $VW $DS && fim

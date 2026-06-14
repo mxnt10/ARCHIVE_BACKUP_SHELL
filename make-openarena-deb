@@ -1,0 +1,95 @@
+#!/bin/bash
+
+########################################################################################################################
+
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+ ###                                                                             ###
+ ###                                                                             ###
+ ### Gerador do pacote DEB do Open Arena que realmente funciona no Linux Mint 20 ###
+ ###                                                                             ###
+ ### By Mauricio Ferrari <m10ferrari1200@gmail.com>                              ###
+ ###                                                                             ###
+ ###                                                                             ###
+ ### Data: 24/05/2020                                                            ###
+ ###                                                                             ###
+ ###                                                                             ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+
+########################################################################################################################
+#               #
+# ### Logo. ### #
+#               #
+#################
+
+echo
+echo ' ______   __  __  __    _   _   _ ____  ___ ____ ___ ___  '
+echo '| __ ) \ / / |  \/  |  / \ | | | |  _ \|_ _/ ___|_ _/ _ \ '
+echo '|  _ \\ V /  | |\/| | / _ \| | | | |_) || | |    | | | | |'
+echo '| |_) || |   | |  | |/ ___ \ |_| |  _ < | | |___ | | |_| |'
+echo '|____/ |_|   |_|  |_/_/   \_\___/|_| \_\___\____|___\___/ '
+echo
+echo
+sleep 1
+
+########################################################################################################################
+#                  #
+# ### Funções. ### #
+#                  #
+####################
+
+notool(){
+	echo
+	echo ' The command dpkg-deb not found! '
+	echo
+	exit 1
+}
+
+########################################################################################################################
+#                    #
+# ### Variáveis. ### #
+#                    #
+######################
+
+ARCH=${ARCH:-amd64}
+TMP=${TMP:-./openarena}
+
+FOLDER=$( pwd )
+CHECK=$( ls /usr/bin/dpkg-deb | cut -d '/' -f 4 )
+
+########################################################################################################################
+#                              #
+# ### Processo de Criação. ### #
+#                              #
+################################
+
+[[ $CHECK != "dpkg-deb" ]] && notool
+
+#wget https://github.com/MauricioFerrari-NovaTrento/openarena-mint-20/releases/download/0.8.8/openarena-0.8.8.zip
+
+mkdir -p $TMP/opt $TMP/usr/share/applications $TMP/DEBIAN
+
+unzip openarena-0.8.8.zip -d $TMP/opt >> /dev/null
+
+rm $TMP/opt/openarena-0.8.8/*dll
+rm $TMP/opt/openarena-0.8.8/*exe
+rm $TMP/opt/openarena-0.8.8/*i386
+rm -r $TMP/opt/openarena-0.8.8/*app
+rm -r $TMP/opt/openarena-0.8.8/__MACOSX
+
+cp control $TMP/DEBIAN
+cp openarena128.png $TMP/opt/openarena-0.8.8
+cp openarena.desktop $TMP/usr/share/applications
+
+dpkg-deb -b $TMP $FOLDER/openarena_0.8.8-1_$ARCH.deb
+
+rm -r $TMP
+
+
+
+
+
+
+
+

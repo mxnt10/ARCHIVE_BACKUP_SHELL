@@ -1,0 +1,19 @@
+#!/bin/bash
+
+CWD="$PWD"
+JUNEST_PREFIX="$CWD/junest_qcine"
+
+echo "
+pt_BR.UTF-8 UTF-8
+pt_BR ISO-8859-1
+" >> $JUNEST_PREFIX/etc/locale.gen
+
+export PATH="$CWD/junest/bin:$PATH"
+
+JUNEST_HOME="$JUNEST_PREFIX" junest -f \
+sh -c '
+pacman --noconfirm -Syy
+pacman --noconfirm -Syu
+pacman --noconfirm -S base-devel gnu-free-fonts
+pacman --noconfirm -S glibc
+exit'

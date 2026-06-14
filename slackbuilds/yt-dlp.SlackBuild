@@ -1,0 +1,66 @@
+#!/bin/sh
+
+# Copyright 2024 Mauricio Ferrari <m10ferrari1200@gmail.com>
+# All rights reserved.
+
+[ $UID != 0 ] && { echo -e "\nExecute como Root !\n"; exit 1; }
+
+PRGNAM=yt-dlp
+VERSION=2024.11.04
+BUILD=${BUILD:-1}
+TAG=${TAG:-_mxnt}
+
+case "$( uname -m )" in
+	i?86) export ARCH=i586 ;;
+	arm*) export ARCH=arm ;;
+	   *) export ARCH=$( uname -m ) ;;
+esac
+
+[ -e "../../_PKGS" ] && { mkdir -p ../../_PKGS/$PRGNAM; chown -R 1000:users ../../_PKGS; cd ../../_PKGS/$PRGNAM; } || {
+    mkdir -p PKGS/$PRGNAM; chown -R 1000:users PKGS; cd PKGS/$PRGNAM
+}
+
+CWD=$PWD
+TMP=/var/tmp/MXNT
+PKG=$TMP/package-$PRGNAM
+LINK=https://github.com/yt-dlp/yt-dlp/releases/download/2024.11.04/yt-dlp
+
+set -e
+wget -c $LINK
+rm -rf $TMP
+mkdir -p $TMP $PKG/{install,usr/bin}
+
+cd $PKG/usr/bin
+cp $CWD/yt-dlp .
+chmod +x yt-dlp
+
+chown -R root:root .
+chmod -R u+w,go+r-w,a+X-s .
+
+echo "      |-----handy-ruler------------------------------------------------------|
+yt-dlp: yt-dlp (download videos from youtube)
+yt-dlp:
+yt-dlp: yt-dlp is a youtube-dl fork based on the now inactive youtube-dlc. The
+yt-dlp: main focus of this project is adding new features and patches while
+yt-dlp: also keeping up to date with the original project.
+yt-dlp:
+yt-dlp:
+yt-dlp:
+yt-dlp:
+yt-dlp:
+yt-dlp:" > $PKG/install/slack-desc
+
+cd $PKG; /sbin/makepkg -l y -c n $CWD/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+chown -R 1000:users $CWD/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+rm -rf $TMP
+
+cd $CWD
+[ ${TIME:-0} != 0 ] && TIME="-t $TIME" || TIME=
+if [ "${INST:-no}" = "yes" ]; then
+	OPTION=y
+else
+	read $TIME -p "O pacote já pode ser instalado? (y/n) (default=n)" OPTION
+fi
+case "$OPTION" in
+	y|Y) /sbin/upgradepkg --install-new --reinstall $PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz ;;
+esac; exit 0

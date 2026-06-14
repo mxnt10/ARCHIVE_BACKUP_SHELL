@@ -1,0 +1,44 @@
+#!/bin/bash
+
+echo "== Gerador de README para AppImage =="
+
+read -p "Nome do AppImage: " APPIMAGE_NAME
+read -p "Descrição do AppImage: " DESC
+read -p "Nome do arquivo .AppImage (ex: app.AppImage): " FILENAME
+
+# Tipo de AppImage
+echo "Selecione o tipo de AppImage:"
+select TIPO in default junest bwrap_proot proot flatpak tarball; do
+    [[ -n "$TIPO" ]] && break
+done
+
+# Base do AppImage
+echo "Selecione a base do AppImage:"
+select BASE in "arch linux" debian flatpak tarball; do
+    [[ -n "$BASE" ]] && break
+done
+
+# Runtime
+echo "Selecione o runtime:"
+select RUNTIME in type2runtime uruntime uruntime_dwarfs; do
+    [[ -n "$RUNTIME" ]] && break
+done
+
+# GlibC incluído?
+echo "A inclusão do glibc está presente?"
+select GLIBC in sim não; do
+    [[ -n "$GLIBC" ]] && break
+done
+
+# Substitui placeholders no template
+sed -e "s/--APPIMAGE-NAME--/$APPIMAGE_NAME/g" \
+    -e "s/--DESC-APPIMAGE--/$DESC/g" \
+    -e "s/--TIPO--/$TIPO/g" \
+    -e "s/--BASE--/$BASE/g" \
+    -e "s/--GLIBC--/$GLIBC/g" \
+    -e "s/--RUNTIME--/$RUNTIME/g" \
+    -e "s/--APPIMAGE--/$FILENAME/g" \
+    template.md > README.md
+
+echo -e "\n✅ README.md gerado com sucesso!"
+

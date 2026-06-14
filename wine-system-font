@@ -1,0 +1,82 @@
+#!/bin/bash
+#
+# Wine System Font Config - Version 1.0
+#
+# Created: 23/05/2020.
+#
+# By Mauricio Ferrari
+
+WINE=wine
+WINEPREFIX=${WINEPREFIX:-$HOME/.wine}
+WINEREG=$WINEPREFIX/system.reg
+DIALOG=whiptail
+
+function reset(){
+	sed -i -e 's/"MS Shell Dlg"="MS Sans Serif"/"MS Shell Dlg"="Tahoma"/g' $WINEREG
+	sed -i -e 's/"MS Shell Dlg 2"="MS Sans Serif"/"MS Shell Dlg 2"="Tahoma"/g' $WINEREG
+	sed -i -e 's/"MS Shell Dlg"="Noto Sans"/"MS Shell Dlg"="Tahoma"/g' $WINEREG
+	sed -i -e 's/"MS Shell Dlg 2"="Noto Sans"/"MS Shell Dlg 2"="Tahoma"/g' $WINEREG
+}
+
+function erro(){
+	echo 
+	echo "Wine Inexistente!"
+	echo 
+	exit 1
+}
+
+function fim(){
+	rm -f $FILE
+	exit 1
+}
+
+function ok(){
+	echo 
+	echo "Fonte Aplicada!"
+	echo 
+	rm -f $FILE
+	exit 1
+}
+
+[[ ! -x `which "$WINE" 2> /dev/null` ]] && erro
+
+[[ ! -x `which "$DIALOG" 2> /dev/null` ]] && DIALOG=dialog
+
+FILE='tempfile' || exit 1
+
+$DIALOG --backtitle "Wine System Font Config - Version 1.0" \
+		--title "Configurar Fonte do Wine" \
+		--menu "\nSelecione a Fonte a ser Usada no Wine:" 12 50 3\
+		1 "MS Sans Serif ( Default )" \
+		2 "Noto Sans ( KDE Plasma 5 )" \
+		3 "Resetar Fonte" 2> $FILE
+
+STATUS=$?
+OPTION=$(cat $FILE)
+
+[[ $STATUS != 0 ]] && fim
+
+case $OPTION in
+	1)
+		reset
+		sed -i -e 's/"MS Shell Dlg"="Tahoma"/"MS Shell Dlg"="MS Sans Serif"/g' $WINEREG
+		sed -i -e 's/"MS Shell Dlg 2"="Tahoma"/"MS Shell Dlg 2"="MS Sans Serif"/g' $WINEREG
+		ok
+		;;
+    2)
+		reset
+		sed -i -e 's/"MS Shell Dlg"="Tahoma"/"MS Shell Dlg"="Noto Sans"/g' $WINEREG
+		sed -i -e 's/"MS Shell Dlg 2"="Tahoma"/"MS Shell Dlg 2"="Noto Sans"/g' $WINEREG
+		ok
+		;;
+	3)
+		reset
+		ok
+		;;
+	*)
+		echo 
+		echo "Nada foi Selecionado!"
+		echo
+		fim
+		;;
+esac

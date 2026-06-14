@@ -1,0 +1,397 @@
+#!/bin/sh
+
+# Slackware build script for <appname>
+
+# Copyright <year> <you> <email>
+# All rights reserved.
+
+# Replaces:
+#
+# - <*year>
+# - <*you>
+# - <*email>
+#
+# - <*source>
+# - <*appname>
+# - <*srcnam>
+# - <*version>
+# - <*srcver>
+# - <*tag>
+# - <*docs>
+# - <*link>
+#
+# source type:
+# autotools
+# cmake
+# python
+# meson
+# haskell
+# perl
+# qmake
+# deb_current
+# custom
+#
+###############################################################################
+
+
+test $UID != 0 && {
+    echo -e "\n run as root !\n"
+    exit 1
+}
+
+
+SOURCETYPE="<source>"
+INSTALLFINISH=${INSTALLFINISH:-ask} # true - ask - false
+ONLY64="false" # true - false
+REINSTALL="--reinstall" # clean for not reinstall
+
+PRGNAM="<appname>"
+SRCNAM="<srcnam>"
+VERSION=${VERSION:-<version>}
+SRCVER=${SRCVER:-<srcver>}
+BUILD=${BUILD:-1}
+TAG=${TAG:-_<tag>}
+PKGTYPE=${PKGTYPE:-txz} # txz - tgz
+
+DOCS="<docs>"
+
+
+test -e "../../_PKGS" && {
+    mkdir -p ../../_PKGS/$PRGNAM
+    chown 1000:users ../../_PKGS
+    cd ../../_PKGS/$PRGNAM
+} || {
+    mkdir -p PKGS/$PRGNAM
+    chown 1000:users PKGS
+    cd PKGS/$PRGNAM
+}
+
+
+# verify architecture and define tags
+test -z "$ARCH" && {
+  case "$( uname -m )" in
+    i?86) ARCH=i586 ;;
+    arm*) ARCH=arm ;;
+       *) ARCH=$( uname -m ) ;;
+  esac
+}
+
+# variable PRINT_PACKAGE_NAME
+test -n "${PRINT_PACKAGE_NAME}" && {
+  echo "$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.$PKGTYPE"
+  exit 0
+}
+
+test "$ONLY64" == "true" && {
+    test "$ARCH" != "x86_64" && {
+        echo -e "\n $ARCH not supported !\n"
+        exit 1
+    }
+}
+
+LIBDIRSUFFIX=""
+[[ "$ARCH" =~ "x86_64|aarch64" ]] && LIBDIRSUFFIX="64"
+
+case "$ARCH" in
+       i586) SLKCFLAGS="-O2 -march=i586 -mtune=i686" ;;
+       i686) SLKCFLAGS="-O2 -march=i686 -mtune=i686" ;;
+     x86_64) SLKCFLAGS="-O2 -fPIC" ;;
+    aarch64) SLKCFLAGS="-O2 -fPIC" ;;
+          *) SLKCFLAGS="-O2" ;;
+esac
+
+CWD=$PWD
+TMP=${TMP:-/tmp/<tag>}
+PKG=$TMP/package-$PRGNAM
+OUTPUT=${OUTPUT:-$CWD}
+
+
+#############################################################
+
+LINKS="<link>"
+LINK_GIT=""
+CLINK=""
+
+SOURCEFILE="tar" # tar - deb_xz - deb_gz - rpm - zip - custom
+CUSTOMCOMPILE="false" # true - false
+CUSTOMPOST="false"  # true - false
+
+#############################################################
+
+
+set -e
+
+# download link list
+for LINK in $LINKS
+{
+    wget -c "$LINK"
+    chroot 1000:users "$LINK"
+}
+
+test -n "$LINK_GIT" && {
+    for LINK in $LINK_GIT
+    {
+        git -clone "$LINK"
+        chroot 1000:users "${LINK##*/}"
+    }
+}
+
+test -n "$CLINK" && wget -c -O $PRGNAM-$VERSION.tar.gz "$CLINK"
+
+# detect version in current package
+test "$SOURCETYPE" == "deb_current" && {
+    test "$SOURCEFILE" == "deb_xz" && {
+        VERSION=$(grep -Eom1 "([0-9]+[.])+[0-9]+" <(tar xJO ./control < <(ar p "${SRCNAM}"*.deb control.tar.xz)))
+    }
+    test "$SOURCEFILE" == "deb_gz" && {
+        VERSION=$(grep -Eom1 "([0-9]+[.])+[0-9]+" <(tar xzO ./control < <(ar p "${SRCNAM}"*.deb control.tar.gz)))
+    }
+}
+
+rm -rf "$TMP"
+mkdir -p "$TMP"
+cd "$TMP"
+
+case "$SOURCEFILE" in
+       tar) tar xvf $CWD/${SRCNAM}?${VERSION}*.tar.?z ;;
+    deb_xz) tar xJvf <(ar p $CWD/${SRCNAM}?${VERSION}*.deb data.tar.xz) ;;
+    deb_gz) tar xzvf <(ar p $CWD/${SRCNAM}?${VERSION}*.deb data.tar.gz) ;;
+       rpm) cpio -di < <(rpm2cpio $CWD/${SRCNAM}?${VERSION}*.rpm) ;;
+       zip) unzip $CWD/${SRCNAM}?${SRCVER}*.zip ;;
+    custom) echo "custom" ;;
+esac
+
+####################################################
+
+DIRECTORY=${SRCNAM}?${SRCVER}* # change if necessary
+
+####################################################
+
+cd "$DIRECTORY"
+
+
+# ### COMPILATION FUNCTIONS ### #
+
+
+function fix_perms
+{
+    chown -R root:root .
+    find -L . \
+     \( -perm 777 -o -perm 775 -o -perm 750 -o -perm 711 -o -perm 555 \
+      -o -perm 511 \) -exec chmod 755 {} \; -o \
+     \( -perm 666 -o -perm 664 -o -perm 640 -o -perm 600 -o -perm 444 \
+      -o -perm 440 -o -perm 400 \) -exec chmod 644 {} \;
+}
+
+
+export "$CWD"
+
+function verify_patch
+{
+     for PATHFILE in $CWD/*.path
+     {
+        patch -p1 < "$PATHFILE"
+     }
+}
+
+export "$SLKCFLAGS"
+export "$LIBDIRSUFFIX"
+export "$PRGNAM"
+export "$VERSION"
+export "$ARCH"
+export "$PKG"
+
+export NUMJOBS=${NUMJOBS:-" -j$(expr $(nproc) + 1) "}
+
+function build_autotools
+{
+
+CFLAGS="$SLKCFLAGS" \
+CXXFLAGS="$SLKCFLAGS" \
+./configure \
+  --prefix=/usr \
+  --libdir=/usr/lib${LIBDIRSUFFIX} \
+  --sysconfdir=/etc \
+  --localstatedir=/var \
+  --mandir=/usr/man \
+  --docdir=/usr/doc/$PRGNAM-$VERSION \
+  --disable-static \
+  --build=$ARCH-slackware-linux
+
+    make $NUMJOBS
+    make install DESTDIR=$PKG
+}
+
+
+function build_cmake
+{
+    mkdir -p build
+    cd build
+      cmake \
+        -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
+        -DCMAKE_CXX_FLAGS:STRING="$SLKCFLAGS" \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DLIB_SUFFIX=${LIBDIRSUFFIX} \
+        -DMAN_INSTALL_DIR=/usr/man \
+        -DCMAKE_BUILD_TYPE=Release ..
+      make $NUMJOBS
+      make install/strip DESTDIR=$PKG
+    cd ..
+}
+
+
+function build_python
+{
+    python2 setup.py install --root=$PKG
+    python3 setup.py install --root=$PKG
+
+    # If your application only has a pyproject.toml:
+    #python3 -m build --wheel --no-isolation
+    #python3 -m installer --destdir "$PKG" dist/*.whl
+}
+
+
+function build_meson
+{
+    mkdir build
+    cd build
+  CFLAGS="$SLKCFLAGS" \
+  CXXFLAGS="$SLKCFLAGS" \
+  meson .. \
+    --buildtype=release \
+    --infodir=/usr/info \
+    --libdir=/usr/lib${LIBDIRSUFFIX} \
+    --localstatedir=/var \
+    --mandir=/usr/man \
+    --prefix=/usr \
+    --sysconfdir=/etc \
+    -Dstrip=true
+
+    "${NINJA:=ninja}" $NUMJOBS
+    DESTDIR=$PKG $NINJA install
+    cd ..
+}
+
+
+function build_haskell
+{
+    GHC_VERSION=$(ghc --numeric-version)
+
+CFLAGS="$SLKCFLAGS" \
+CXXFLAGS="$SLKCFLAGS" \
+runghc Setup configure \
+  --prefix=/usr \
+  --libdir=/usr/lib${LIBDIRSUFFIX} \
+  --libsubdir=ghc-${GHC_VERSION}/$SRCNAM-$VERSION \
+  --enable-shared \
+  --enable-library-profiling \
+  --docdir=/usr/doc/$PRGNAM-$VERSION
+
+    runghc Setup build
+    runghc Setup haddock
+    runghc Setup copy --destdir=$PKG
+    runghc Setup register --gen-pkg-config
+
+    PKGCONFD=/usr/lib${LIBDIRSUFFIX}/ghc-${GHC_VERSION}/package.conf.d
+    PKGID=$( grep -E "^id: " $SRCNAM-$VERSION.conf | cut -d" " -f2 )
+    mkdir -p $PKG/$PKGCONFD
+    mv $SRCNAM-$VERSION.conf $PKG/$PKGCONFD/$PKGID.conf
+}
+
+
+function build_perl
+{
+    perl Makefile.PL \
+      PREFIX=/usr \
+      INSTALLDIRS=vendor \
+      INSTALLVENDORMAN1DIR=/usr/man/man1 \
+      INSTALLVENDORMAN3DIR=/usr/man/man3
+    make $NUMJOBS
+    make test
+    make install DESTDIR=$PKG
+
+    find $PKG -depth -type d -empty -delete || true
+}
+
+
+function build_qmake
+{
+    /usr/bin/qmake-qt5 -o Makefile $PRGNAM.pro
+
+    make $NUMJOBS
+    make install DESTDIR=$PKG
+}
+
+
+function make_custom
+{
+    return 0
+}
+
+fix_perms
+verify_patch
+
+test "$CUSTOMCOMPILE" == "true" && make_custom || {
+    case "" in
+          autotools) build_autotools ;;
+              cmake) build_cmake ;;
+             pyhton) build_python ;;
+              meson) build_meson ;;
+            haskell) build_haskell ;;
+               perl) build_perl ;;
+              qmake) build_qmake ;;
+                  *) make_custom ;;
+    esac
+}
+
+
+# ### POST COMPILE ### #
+
+
+function custom_post
+{
+    return 0
+}
+
+find $PKG -print0 | xargs -0 file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
+
+test "$CUSTOMPOST" == "yes" && custom_post || test "$SOURCETYPE" != "haskell" && {
+    rm -f $PKG/{,usr/}lib${LIBDIRSUFFIX}/*.la
+
+    find $PKG/usr/man -type f -exec gzip -9 {} \;
+    for i in $( find $PKG/usr/man -type l ) ; do ln -s $( readlink $i ).gz $i.gz ; rm $i ; done
+
+    rm -f $PKG/usr/info/dir
+    gzip -9 $PKG/usr/info/*.info* || true
+
+    find $PKG -name perllocal.pod -o -name ".packlist" -o -name "*.bs" | xargs rm -f || true
+}
+
+mkdir -p $PKG/usr/doc/$PRGNAM-$VERSION
+cp -a "$DOCS" $PKG/usr/doc/$PRGNAM-$VERSION
+cat $CWD/$PRGNAM.SlackBuild > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.SlackBuild
+
+mkdir -p $PKG/install
+cat $CWD/slack-desc > $PKG/install/slack-desc
+test -f "$CWD/doinst.sh" && cat $CWD/doinst.sh > $PKG/install/doinst.sh
+
+
+# ### FINISH ### #
+
+
+cd $PKG
+/sbin/makepkg -l y -c n $OUTPUT/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.$PKGTYPE
+chown 1000:users $OUTPUT/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.$PKGTYPE
+rm -rf $TMP
+
+[[ "$INSTALLFINISH" =~ "false|no|n|0" ]] && exit 0
+
+cd $OUTPUT
+
+OPTION= # no change
+[[ "$INSTALLFINISH" =~ "true|yes|y|1" ]] && OPTION="y" || read -p "O pacote já pode ser instalado? (y/n) (default=n)" OPTION
+
+case "$OPTION" in
+    s|S|y|Y) /sbin/upgradepkg --install-new "$REINSTALL" "$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.$PKGTYPE" ;;
+esac; exit 0

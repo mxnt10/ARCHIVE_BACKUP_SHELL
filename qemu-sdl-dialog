@@ -1,0 +1,185 @@
+#!/bin/bash
+#
+# QEMU-SDL Interface (0.3)
+#
+# Interface gráfica para o qemu com a opção -display sdl.
+#
+# Construção do projeto:  07/08/2018.
+# Ultima alteração:   16/08/2018.
+#
+# Criado por Mauricio Ferrari. Nova Trento, Santa Catarina, Brasil.
+#
+
+ ### Definindo os títulos para o dialog.
+
+BT="QEMU-SDL Interface (0.3) - Interface gráfica para o qemu com a opção -display sdl."
+Q="QEMU-SDL Interface (0.3) - Por Mauricio Ferrari"
+
+#########################################################################################################################################
+
+# Parte do script responsavel pela identificação da imagem a ser emulada.
+
+progress () {
+dialog --backtitle "$BT" --title "$Q" --inputbox "\nSelecione a localização da imagem.\n\
+\nO programa não aceita espaços nos nomes e diretórios.\n\
+\nSe já estiver no diretório da imagem, digite apenas o nome da\n\
+imagem a ser emulada.\n\
+\nDigite:\n" 20 80 2> /tmp/replyb ### O caminho digitado é escrito no arquivo temporário replyb.
+REPLYB="$(cat /tmp/replyb)"       ### Extração do caminho digitado em replyb.
+rm -f /tmp/replyb
+if [ -f "$REPLYB" ]; then
+	$qemu $REPLYB 2> /dev/null ### Comando que executa o qemu.
+	else
+	dialog --backtitle "$BT" --title "$Q" --msgbox "\n\n\
+	\nImagem de Disco não encontrada!\n " 20 80 ### Mensagem exibida em caso de erro.
+	principal
+fi 
+}
+#########################################################################################################################################
+
+# Parte do script responsavel pela identificação do dispositivo a ser emulado.
+
+progress2 () {
+dialog --backtitle "$BT" --title "$Q" --inputbox "\nIdentifique o dispositivo a ser emulado.\n\
+\nPor exemplo, sda.\n\
+\nDigite:\n" 20 80 2> /tmp/replyc ### O caminho digitado é escrito no arquivo temporário replyc.
+REPLYC="$(cat /tmp/replyc)"       ### Extração do caminho digitado em replyc.
+rm -f /tmp/replyc
+if [ -e "/dev/$REPLYC" ]; then
+	$qemu -drive file=/dev/$REPLYC,if=ide,index=0,media=disk,format=raw 2>/dev/null ### executa o qemu com parâmetros extras.
+	else
+	dialog --backtitle "$BT" --title "$Q" --msgbox "\n\n\
+	\nO dispositivo não foi identificado!\n " 20 80 ### Mensagem exibida em caso de erro.
+	principal
+fi 
+}
+
+#########################################################################################################################################
+
+# Parte do script que define as opções e executa o qemu com as opções que você selecionou.
+
+progress3 () {
+dialog --backtitle "$BT" --title "$Q" --inputbox "\nIdentifique o dispositivo ou imagem a ser emulada.\n\
+\nO programa não aceita espaços nos nomes e diretórios.\n\
+\nDigite:\n" 20 80 2> /tmp/reply1
+REP1="$(cat /tmp/reply1)"  
+rm -f /tmp/reply1
+dialog --backtitle "$BT" --title "$Q" --inputbox "\nDefina a quantidade de memória a ser usada.\n\
+\nPor exemplo, 512M, 1024M, 2048M, 2G, 4G.\n\
+\nDigite:\n" 20 80 2> /tmp/reply2
+REP2="$(cat /tmp/reply2)"  
+rm -f /tmp/reply2
+dialog --backtitle "$BT" --title "$Q" --yesno "Deseja habilitar o suporte USB?" 6 80
+if [ -e "/dev/$REP1" ]; then
+	DRIVE="-drive file=/dev/$REP1,if=ide,index=0,media=disk,format=raw"
+fi
+if [ -f "$REP1" ]; then
+	ISO="$REP1"
+fi
+if [ "$REP2" = "" ]; then
+	MEM="-m 128M"
+else
+	MEM="-m $REP2"
+fi
+if [ $? = 0 ]; then
+	USB="-usb"
+fi
+$qemu $MEM $USB $DRIVE $ISO
+principal
+}
+
+#########################################################################################################################################
+
+# Parte do script responsavel por definir as opções personalizadas.
+
+person () { 
+dialog --backtitle "$BT" --title "$Q" \
+--menu "\nEscolha um emulador.\n\
+\nOpções disponíveis:\n" 20 80 10 \
+"1" "QEMU-i386   -Display SDL" \
+"2" "QEMU-x86_64 -Display SDL" 2> /tmp/replyd
+REPLYD="$(cat /tmp/replyd)"
+rm -f /tmp/replyd
+if [ "$REPLYD" = "1" ]; then
+	qemu="qemu-system-i386 -display sdl"
+	progress3
+fi
+if [ "$REPLYD" = "2" ]; then
+	qemu="qemu-system-x86_64 -display sdl"
+	progress3
+fi
+}
+
+#########################################################################################################################################
+
+# Menu principal onde estão as opções predefinidas para serem escolhidas.
+
+principal () {
+while [ 0 ]; do
+	dialog --backtitle "$BT" --title "$Q" \
+	--menu "\nBem-vindo ao QEMU-SDL (0.3)\n\
+	\nLista de opções pré-definidas:\n" 20 80 10 \
+	"1" "QEMU-i386   -Display SDL" \
+	"2" "QEMU-x86_64 -Display SDL" \
+	"3" "QEMU-i386   -Display SDL -Memória:  512M" \
+	"4" "QEMU-x86_64 -Display SDL -Memória:  512M" \
+	"5" "QEMU-i386   -Display SDL -Memória: 1024M -USB Support" \
+	"6" "QEMU-x86_64 -Display SDL -Memória: 1024M -USB Support" \
+	"7" "QEMU-i386   -Display SDL -Memória: 1024M -Boot de Dispositivos" \
+	"8" "QEMU-x86_64 -Display SDL -Memória: 1024M -Boot de Dispositivos" \
+	"9" "Opções Personalizadas" \
+	"0" "Sair do Programa" 2> /tmp/replya ### A opção escolhida será escrita no arquivo temporário replya.
+if [ ! $? = 0 ]; then
+	rm -f /tmp/replya ### Argumento para a opção cancelar.
+	clear
+	exit
+fi
+
+#########################################################################################################################################
+
+# Parte do script que detecta a opção que foi selecionada no menu principal.
+
+REPLY="$(cat /tmp/replya)"
+rm -f /tmp/replya
+if [ "$REPLY" = "0" ]; then ### Argumento para a opção sair do programa.
+	clear
+	exit
+fi
+if [ "$REPLY" = "1" ]; then
+	qemu="qemu-system-i386 -display sdl"
+	progress
+fi
+if [ "$REPLY" = "2" ]; then
+	qemu="qemu-system-x86_64 -display sdl"
+	progress
+fi
+if [ "$REPLY" = "3" ]; then
+	qemu="qemu-system-i386 -m 512 -display sdl"
+	progress
+fi
+if [ "$REPLY" = "4" ]; then
+	qemu="qemu-system-x86_64 -m 512 -display sdl"
+	progress
+fi
+if [ "$REPLY" = "5" ]; then
+	qemu="qemu-system-i386 -m 1024 -usb -display sdl"
+	progress
+fi
+if [ "$REPLY" = "6" ]; then
+	qemu="qemu-system-x86_64 -m 1024 -usb -display sdl"
+	progress
+fi
+if [ "$REPLY" = "7" ]; then
+	qemu="qemu-system-i386 -m 1024 -usb -display sdl"
+	progress2
+fi
+if [ "$REPLY" = "8" ]; then
+	qemu="qemu-system-x86_64 -m 1024 -usb -display sdl"
+	progress2
+fi
+if [ "$REPLY" = "9" ]; then ### Comando para as opções personalizadas.
+	person
+fi
+done
+}
+principal

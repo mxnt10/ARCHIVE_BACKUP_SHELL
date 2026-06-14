@@ -1,0 +1,248 @@
+#!/bin/bash
+
+################################################################################################
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+ ###                                                                         ###
+ ### Slackware Current - Pós Instalação - Zero Bala - Completo - 22/08/2020. ###
+ ###                                                                         ###
+ ### Versão 1.0 - 22/08/2020.                                                ###
+ ###                                                                         ###
+ ###                                                                         ###
+ ### By Mauricio Ferrari - Nova Trento - SC.                                 ###
+ ###                                                                         ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+################################################################################################
+
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+ ###                                                                                 ###
+ ### Script que Facilita a Configuração do Slackware Após sua Instalação.            ###
+ ###                                                                                 ###
+ ###   Inclui:                                                                       ###
+ ###                                                                                 ###
+ ### - Configuração do Teclado ABNT2 - Modo Texto e Interface.                       ###
+ ### - Configuração do Idioma para pt_BR.UTF-8.                                      ###
+ ### - Configuração de Fonte com Acentos em Português.                               ###
+ ### - Ativação do sudo.                                                             ###
+ ### - Desativação dos Terminais 3, 4, 5 e 6.                                        ###
+ ### - Ativação do Comando unicode_start para Exibição Correta do Caracteres ISO.    ###
+ ### - Correção de dmesg para Funcionar como Usuário Comum.                          ###
+ ### - Inclusão dos Paths /usr/sbin e /sbin.                                         ###
+ ### - Execução do xorgsetup.                                                        ###
+ ### - Execução do netconfig.                                                        ###
+ ### - Execução do adduser.                                                          ###
+ ### - Configuração do Fuso Horário.                                                 ###
+ ###                                                                                 ###
+ ###                                                                                 ###
+ ###   Ajustes de Serviços:                                                          ###
+ ###                                                                                 ###
+ ### - Ativação do Serviço de Rede (Por Garantia).                                   ###
+ ### - Ativação do Servidor de Impressão.                                            ###
+ ### - Ativação do rc.local.                                                         ###
+ ### - Ativação do servidor NTP.                                                     ###
+ ### - Desativação do Serviço de Bluetooth.                                          ###
+ ### - Desativação do Mouse no Modo Texto.                                           ###
+ ### - Desativação do syslog.                                                        ###
+ ### - Desativação do ulogd.                                                         ###
+ ### - Desativação do Servidor SSH.                                                  ###
+ ### - Desativação do cpufreq.                                                       ###
+ ### - Desativação do inet2.                                                         ###
+ ###                                                                                 ###
+ ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+################################################################################################
+
+
+################################################################################################
+#
+#
+# ### Verificar Usuário Root ###
+
+[ "$UID" != "0" ] && echo -e "\n\033[1;31m Execute como Root!\033[0m\n" && exit 1
+
+
+################################################################################################
+#
+#
+# ### Configurar Teclado ABNT2 no Modo Texto ###
+
+keymapservice(){
+echo '#!/bin/sh
+
+if [ -x /usr/bin/loadkeys ]; then
+	/usr/bin/loadkeys br-abnt2.map
+fi' | tee -a /etc/rc.d/rc.keymap
+	chmod 755 /etc/rc.d/rc.keymap
+}
+
+brkeymap(){
+	rm /etc/rc.d/rc.keymap
+	keymapservice
+}
+
+[ ! -e "/etc/rc.d/rc.keymap" ] && keymapservice
+[ -e "/etc/rc.d/rc.keymap" ] && [ ! "`grep br-abnt2.map /etc/rc.d/rc.keymap`" ] && brkeymap
+
+
+################################################################################################
+#
+#
+# ### Configurar Teclado ABNT2 para a Interface via X Server ###
+
+keyboardlayout(){
+echo 'Section "InputClass"
+	Identifier "keyboard-all"
+	MatchIsKeyboard "on"
+	MatchDevicePath "/dev/input/event*"
+	Driver "evdev"
+	Option "XkbLayout" "br"
+	Option "XkbVariant" "abnt2"
+	Option "XkbOptions" "terminate:ctrl_alt_bksp"
+EndSection' | tee -a /etc/X11/xorg.conf.d/90-keyboard-layout.conf
+}
+
+[ ! -e "/etc/X11/xorg.conf.d/90-keyboard-layout.conf" ] && keyboardlayout
+
+
+################################################################################################
+#
+#
+# ### Ajustar Idioma para o Português do Brasil ###
+
+langptbr(){
+	sed -i '14d' /etc/profile.d/lang.sh
+	sed -i '14i export LANG=pt_BR.UTF-8' /etc/profile.d/lang.sh
+	sed -i '15i export LC_ALL=pt_BR.UTF-8' /etc/profile.d/lang.sh
+	sed -i '16i export LINGUAS=pt_BR.UTF-8' /etc/profile.d/lang.sh
+	sed -i '17i export LANGUAGE=pt_BR.UTF-8' /etc/profile.d/lang.sh
+
+	sed -i '14d' /etc/profile.d/lang.csh
+	sed -i '14i setenv LANG pt_BR.UTF-8' /etc/profile.d/lang.csh
+	sed -i '15i setenv LC_ALL pt_BR.UTF-8' /etc/profile.d/lang.csh
+	sed -i '16i setenv LINGUAS pt_BR.UTF-8' /etc/profile.d/lang.csh
+	sed -i '17i setenv LANGUAGE pt_BR.UTF-8' /etc/profile.d/lang.csh
+}
+
+[ ! "`grep pt_BR.UTF-8 /etc/profile.d/lang.*h`" ] && langptbr
+
+################################################################################################
+#
+#
+# ### Trocar Fonte para uma Fonte com Acentos em Português ###
+
+fontpsfu(){
+	sed -i 's/setfont -v/setfont -v lat0-16.psfu.gz/' /etc/rc.d/rc.font
+}
+
+[ ! "`grep lat0-16.psfu.gz /etc/rc.d/rc.font`" ] && fontpsfu
+
+
+################################################################################################
+#
+#
+# ### Habilitar sudo ###
+
+sed -i 's/# ALL ALL=(ALL) ALL/ALL ALL=(ALL) ALL/' /etc/sudoers
+sed -i 's/# %sudo	ALL=(ALL) ALL/%sudo ALL=(ALL) ALL/' /etc/sudoers
+sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
+sed -i 's/# Defaults secure_path/Defaults secure_path/' /etc/sudoers
+
+
+################################################################################################
+#
+#
+# ### Eliminar Terminais Inúteis ###
+
+sed -i '54d' /etc/inittab
+sed -i '54i #c3:12345:respawn:/sbin/agetty 38400 tty3 linux' /etc/inittab
+sed -i '55d' /etc/inittab
+sed -i '55i #c4:12345:respawn:/sbin/agetty 38400 tty4 linux' /etc/inittab
+sed -i '56d' /etc/inittab
+sed -i '56i #c5:12345:respawn:/sbin/agetty 38400 tty5 linux' /etc/inittab
+sed -i '57d' /etc/inittab
+sed -i '57i #c6:12345:respawn:/sbin/agetty 38400 tty6 linux' /etc/inittab
+
+
+################################################################################################
+#
+#
+# ### Corrigir Bug do dmesg que não Funciona como Usuário Comum ###
+
+chmod +s /bin/dmesg
+
+
+################################################################################################
+#
+# ### Configurar o Fuso Horário ###
+
+ntpcong(){
+	sh /etc/rc.d/rc.ntpd stop
+	sed -i '24i server br.pool.ntp.org' /etc/ntp.conf
+	ntpdate br.pool.ntp.org
+	hwclock --systohc --localtime
+	sh /etc/rc.d/rc.ntpd start
+}
+
+[ ! "`grep br.pool.ntp.org /etc/ntp.conf`" ] && ntpconf
+
+
+################################################################################################
+#
+#
+# ### Ajustar Serviços ###
+
+chmod +x /etc/rc.d/rc.cups
+chmod +x /etc/rc.d/rc.local
+chmod +x /etc/rc.d/rc.networkmanager
+chmod +x /etc/rc.d/rc.ntpd
+#chmod +x /etc/rc.d/rc.samba
+chmod -x /etc/rc.d/rc.bluetooth
+chmod -x /etc/rc.d/rc.cpufreq
+chmod -x /etc/rc.d/rc.gpm-sample
+chmod -x /etc/rc.d/rc.inet2
+#chmod -x /etc/rc.d/rc.sshd
+chmod -x /etc/rc.d/rc.syslog
+chmod -x /etc/rc.d/rc.ulogd
+
+
+################################################################################################
+#
+#
+# ### Comando para os Caracteres ISO serem Exibidos Corretamente ###
+
+unicodestart(){
+	sed -i '9i unicode_start' /etc/rc.d/rc.local
+}
+
+[ ! "`grep unicode_start /etc/rc.d/rc.local`" ] && unicodestart
+
+
+################################################################################################
+#
+#
+# ### Incluir Patchs Faltantes ###
+
+sed -i '17d' /etc/profile
+sed -i '17i PATH="/usr/local/bin:/usr/bin:/bin:/usr/games:/usr/sbin:/sbin"' /etc/profile
+
+
+################################################################################################
+#
+# ### Configurar o X.org ###
+
+#[ ! -e "/etc/X11/xorg.conf" ] && xorgsetup && mv xorg.conf.new /etc/X11/xorg.conf
+
+
+################################################################################################
+#
+# ### Configurar e Rede ###
+
+#netconfig
+
+
+################################################################################################
+#
+# ### Adicionar Novo Usuário ###
+
+adduser

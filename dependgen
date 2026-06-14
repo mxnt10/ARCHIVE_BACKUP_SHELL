@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# DependGen v1.0 - By Mauricio Ferrari - 12/08/2020
+
+NL=${NL:-/dev/null}
+TM=${TM:-temp}
+L1=${LST:-$TM/lst1}
+L2=${LST:-$TM/lst2}
+L3=${LST:-$TM/lst3}
+DP=${LST:-$TM/dp}
+
+[[ ! -e $1 ]] && echo && echo -e "\033[1;31m O binário '$1' não foi localizado! \033[0m" && echo && exit 1
+[[ ! `ldd $1 2> $NL` ]] && echo && echo -e "\033[1;31m O binário '$1' não é um executável dinâmico! \033[0m" && echo && exit 1
+
+mkdir $TM 2> $NL
+
+ldd $1 | cut -d " " -f1 | sed -e 's|	||' -e 's|/[^/]*/||' 1>> $L1 2> $NL && sed -i "1d" $L1 && echo
+
+for x in `cat $L1`; do
+	dpkg -S $x 2> $NL | cut -d ':' -f1 1>> $L2 && echo -e "\033[1;34m $x \033[1;31m-->\033[1;32m OK\033[0m"
+done
+
+cat $L2 | sort | uniq >> $L3
+
+for x in `cat $L3`; do
+	echo -n ' ' >> $DP && echo -n $x >> $DP
+done
+
+sed -i -e 's/ //' -e 's/ /, /g' -e 's/^/Depends: /' $DP
+
+echo && cat $DP && echo
+
+rm -r $TM

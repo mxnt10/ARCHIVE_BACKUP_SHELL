@@ -1,0 +1,207 @@
+#!/bin/bash
+
+ ### PKG Sync v4.0 - 02/12/2020 - By Mauricio Ferrari - <m10ferrari1200@gmail.com>
+ ### Uso: ./pkgsync <check/clean/rm/ls/cp>
+
+##################################################################################
+
+
+ ### Configuração Manual do Destino dos Pacotes
+
+
+DR=~/DDE
+
+
+ ### Constantes A=${A:-B}
+
+
+DB=${DB:-/var/cache/apt/archives/*deb}
+BN=${BN:-/usr/bin}
+NL=${NL:-/dev/null}
+TM=${TM:-temp}
+L1=${L1:-$TM/lst1}
+L2=${L2:-$TM/lst2}
+CL=${CL:-$TM/clean}
+
+
+ ### Padrão de Cores
+
+
+BL=${BL:-\\033[1;47;34m}
+GR=${GR:-\\033[0;47;30m}
+RD=${RT:-\\033[1;47;31m}
+YL=${RT:-\\033[1;40;33m}
+CN=${CN:-\\033[1;33m}
+WT=${WT:-\\033[1;37m}
+RT=${RT:-\\033[0m}
+
+
+ ### Finalização do script
+
+
+fim()
+{
+	[[ -e $TM ]] && rm -r $TM 2> $NL
+	[[ $ERROR == 1 ]] && exit 1
+	[[ $ERROR == 0 ]] && exit 0
+}
+
+
+ ### Informação do Sistema
+
+
+info()
+{
+	echo -e "\n $GR $(basename $0) - Backup dos Pacotes baixados em Cache $RT \n\n $GR Uso: $RT \n $GR $(basename $0) <ls|rm|cp|check|clean> $RT"
+	echo -e "\n $GR Parâmetros: $RT  $GR - ls = Listar os Pacotes em Cache.      $RT \n $GR		 - rm = Remover os Pacotes em Cache.     $RT"
+	echo -e "$GR		 - cp = Copiar os Pacotes em Cache.      $RT \n $GR		 - check = Verificar Pacotes Duplicados. $RT"
+	echo -e "$GR		 - clean = Limpar Pacotes Duplicados.    $RT\n"
+	fim
+}
+
+
+ ### Listar Pacotes em Cache
+
+
+list()
+{
+	echo -e "$WT"
+	ls --color=auto $( echo "$DB" | cut -d '*' -f 1 )
+	fim
+}
+
+
+ ### Remover Pacotes em Cache
+
+
+rmcache()
+{
+	sudo apt-get clean
+	echo -e "\n $BL Cache APT redefinido. $RT"
+	fim
+}
+
+
+ ### Comando para Cópia
+
+
+gocopy()
+{
+	echo -e "$CN"
+	cp -v $DB $DR | cut -d '/' -f 6 | sed "s/'.*'/ copiado/g"
+	echo -e "$RT"
+}
+
+
+ ### Copiar Pacotes em Cache
+
+
+copy()
+{
+	[[   `ls $DB 2> $NL` ]] && gocopy
+	[[ ! `ls $DB 2> $NL` ]] && echo -e "\n $YL Nada Copiado. $RT"
+	fim
+}
+
+
+ ### Verificar LOGs Existentes
+
+
+logcheck()
+{
+	CON=0
+	CNT=0
+	while (( $CON == 0 )); do
+		[[ ! -e ~/excluded$CNT.log ]] && CON=1 && DS=~/excluded$CNT.log
+		[[   -e ~/excluded$CNT.log ]] && let CNT=CNT+1
+	done
+}
+
+
+ ### Gerar os Arquivos para a Comparação
+
+
+listgen()
+{
+	logcheck
+
+
+	### Controle de Erro
+
+
+	[[ ! -e "$DR"              ]] && echo -e "\n $RD O diretório $DR não existe. $RT"                     && ERROR=1 && fim
+	[[ `ls --ignore=*.deb $DR` ]] && echo -e "\n $RD O diretório $DR deveria conter só arquivos DEB. $RT" && ERROR=1 && fim
+
+
+	### Gerando as listas de comparação.
+
+
+	mkdir $TM 2> $NL
+	apt list --installed 2> $NL | sed -e 's| \[.*\]||g' -e 's|/.*now |_|g' -e 's| |_|g' -e '1d' 1> $L1
+	ls $DR | sed -e 's|\.deb||g' -e 's|%3a|:|g' > $L2
+}
+
+
+ ### Visualizando o Arquivo de LOG.
+
+
+viewlog()
+{
+	VF=0
+	[[ ! `cat $DS 2> $NL` ]] && VF=1 && echo -e "\n $YL Nenhum novo log foi gerado. Não há pacotes obsoletos. $RT"
+	[[ ! "xdg-open $DS" ]] && [[ $VF = 0 ]] && echo -e "\n $YL Não foi possível encontrar um editor para visualizar o log. $RT"
+	[[   "xdg-open $DS" ]] && [[ $VF = 0 ]] && xdg-open $DS
+	fim
+}
+
+
+ ### Verificar Pacotes Duplicados
+
+
+checkup()
+{
+	listgen
+	for X in `cat $L2`; do
+		[[ $(cat $L1 | grep -w $X) = "" ]] && echo $X >> $DS
+	done
+	viewlog
+}
+
+
+ ### Comando para Limpeza
+
+
+goclean()
+{
+	echo $X >> $DS
+	echo $X | sed -e 's|:|%3a|g' > $CL
+	rm $DR/$(cat $CL).deb
+}
+
+
+ ### Limpar Pacotes Duplicados
+
+
+cleaner()
+{
+	listgen
+	for X in `cat $L2`; do
+		[[ $(cat $L1 | grep -w $X) = "" ]] && goclean
+	done
+	viewlog
+}
+
+
+ ### Função Principal
+
+
+main()
+{
+	ERROR=0
+	[[ $1 = ""   ]] && info
+	[[ $1 = "ls" ]] && list
+	[[ $1 = "rm" ]] && rmcache
+	[[ $1 = "cp" ]] && copy
+	[[ $1 = "check" ]] && checkup
+	[[ $1 = "clean" ]] && cleaner
+}; main $1

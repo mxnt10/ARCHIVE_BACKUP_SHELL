@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# QCine Multimedia Player APPIMAGE
+#
+
+: ${APPDIR:="$(dirname "$(readlink -f "${0}")")"}
+echo "$APPDIR"
+
+export LIBRARY_PATH="$APPDIR/usr/lib":$LIBRARY_PATH
+export LIBRARY_PATH="$APPDIR/usr/lib64":$LIBRARY_PATH
+export LIBRARY_PATH="$APPDIR/lib64":$LIBRARY_PATH
+
+MAIN="$APPDIR/qcine/qcine"
+
+exec "${APPDIR}/lib64/ld-linux-x86-64.so.2" --inhibit-cache --library-path "${LIBRARY_PATH}" ${MAIN} "$@"

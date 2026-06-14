@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# Create container junest for test qcine in Arch Linux
+#
+# By Mauricio Ferrari
+#
+
+set -e
+
+CWD="$PWD"
+JUNEST_PREFIX="$CWD/junest_qcine"
+
+export PATH="$CWD/junest/bin:$PATH"
+
+test ! -d "$JUNEST_PREFIX" && JUNEST_HOME="$JUNEST_PREFIX" junest setup && ./fix_locale
+
+JUNEST_HOME="$JUNEST_PREFIX" junest -f \
+sh -c '
+pacman --noconfirm -Syy
+pacman --noconfirm -Syu
+'
+
+# JUNEST_HOME="$JUNEST_PREFIX" junest \
+# sh -c '
+# yay -S ffmpeg-full
+# '
+
+JUNEST_HOME="$JUNEST_PREFIX" junest -f \
+sh -c '
+pacman --noconfirm -S \
+    noto-fonts noto-fonts-extra breeze-icons hicolor-icon-theme \
+    qt6-base qt6-multimedia qt6-multimedia-ffmpeg qt6-multimedia-gstreamer qt6-svg qt6-declarative qt6-shadertools qt6-tools \
+    gst-plugins-base gst-libav gst-plugins-bad gst-plugins-good gst-plugins-ugly cmake vlc ffmpeg
+'
+
+mkdir -p "$JUNEST_PREFIX"/{qcine_tarball,qcine/build}
+
+cd ..
+
+rsync -av --delete --progress cmake src src_extra utils lang CMakeLists.txt "$JUNEST_PREFIX/qcine"
+rsync -av --delete --progress appdata background icons lang "$JUNEST_PREFIX/qcine_tarball"
+
+JUNEST_HOME="$JUNEST_PREFIX" junest \
+sh -c '
+cd /qcine/build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make -j$(nproc)
+cp qcine /qcine_tarball'

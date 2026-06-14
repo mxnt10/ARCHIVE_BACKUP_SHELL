@@ -1,0 +1,16 @@
+#!/bin/bash
+
+export JUNEST_HOME=~/vosk
+
+set -e
+
+junest setup
+
+junest -f sh -c "pacman --noconfirm -Syy && pacman --noconfirm -Syu"
+junest -f sh -c "pacman --noconfirm -S python python-requests python-websockets python-cffi python-pycparser python-pip python-setuptools python-tqdm python-hypothesis python-pytest python-build python-installer tar gzip binutils ffmpeg"
+
+junest sh -c "curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/python-srt.tar.gz && tar -xvf python-srt.tar.gz && cd python-srt && makepkg"
+junest -f sh -c "cd python-srt && pacman --noconfirm -U python-srt-*-any.pkg.tar.zst"
+
+junest sh -c "curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/python-vosk-bin.tar.gz && tar -xvf python-vosk-bin.tar.gz && cd python-vosk-bin && makepkg"
+junest -f sh -c "cd python-vosk-bin && pacman --noconfirm -U python-vosk-bin-*-any.pkg.tar.zst"

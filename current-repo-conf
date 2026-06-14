@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Configuração Automática do Repositório e Atualização Inicial
+# Para o Slackware Current - By Mauricio Ferrari - 23/08/2020
+
+# Ativação do Repositório
+sed -i '233s/^# //' /etc/slackpkg/mirrors
+echo && cat /etc/slackpkg/mirrors | grep brasil | grep -v "#" && echo
+
+# Preservar Pacotes Baixados
+sed -i 's/DELALL=on/DELALL=off/' /etc/slackpkg/slackpkg.conf 
+
+# Atualização de Base de Dados
+slackpkg update gpg
+slackpkg update
+
+# Atualização do Sistema
+slackpkg install-new
+slackpkg upgrade-all
+
+# Limpeza de Pacotes Residuais
+slackpkg clean-system

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+pkgfile="wine-stable_9.0-x86_64.AppImage"
+winedata="$PWD/winefiles"
+
+set -e
+
+# Extrair AppImage
+
+rm -rf ./Wine ./winefiles ./project.AppDir
+
+chmod +x "$pkgfile"
+./"$pkgfile" --appimage-extract
+
+# Renomear
+
+mv squashfs-root Wine
+cd Wine
+mv AppRun wine
+
+# Criação do suffix
+
+WINEPREFIX="$winedata" ./wine
+
+cd -
+
+# Criar projeto
+
+mkdir -p project.AppDir
+mv ./Wine ./winefiles ./project.AppDir
+cp AppRun winecfg runexe ./project.AppDir
+
+rm -rf ./Wine ./winefiles
+
+sed -i 's,"/usr/share/vulkan/icd.d/nvidia_icd.json",$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep "nvidia" | paste -d: -s ),' ./project.AppDir/Wine/wrapper
+sed -i 's,VENDOR=$(,VENDOR=$(lspci | grep -i nvidia || ,' ./project.AppDir/Wine/wrapper

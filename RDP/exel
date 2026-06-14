@@ -1,0 +1,25 @@
+#!/bin/bash
+
+: "$(grep USER  ${0%/*}/rdp.conf)"; RDP_USER="${_#*=}"
+: "$(grep PASS  ${0%/*}/rdp.conf)"; RDP_PASS="${_#*=}"
+: "$(grep IP    ${0%/*}/rdp.conf)"; RDP_IP="${_#*=}"
+: "$(grep SCALE ${0%/*}/rdp.conf)"; RDP_SCALE="${_#*=}"
+
+FULL_NAME="Microsoft Exel"
+WIN_EXECUTABLE="C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+ICON=""
+
+LIBGL_ALWAYS_SOFTWARE=1 \
+xfreerdp \
+	/u:"${RDP_USER}" \
+	/p:"${RDP_PASS}" \
+	/v:${RDP_IP}     \
+	+auto-reconnect  \
+	+clipboard       \
+	+home-drive      \
+	-wallpaper       \
+	/scale:${RDP_SCALE} \
+	/dynamic-resolution \
+	/wm-class:"${FULL_NAME}" \
+	/app:"${WIN_EXECUTABLE}" \
+	/app-icon:"${ICON}" 2>&1 &

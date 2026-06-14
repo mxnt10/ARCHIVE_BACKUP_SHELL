@@ -1,0 +1,24 @@
+#!/bin/bash
+
+CHROOT_DIR="$PWD/___Debian"
+RESOLV_FILE="$CHROOT_DIR/etc/resolv.conf"
+
+# sudo mount -t proc /proc "$CHROOT_DIR/proc/"
+# sudo mount -t sysfs /sys "$CHROOT_DIR/sys/"
+# sudo mount --rbind /dev "$CHROOT_DIR/dev/"
+# sudo mount --rbind /run "$CHROOT_DIR/run/"
+
+# test ! -f "$RESOLV_FILE-bak" && {
+#     sudo mv "$RESOLV_FILE" "$RESOLV_FILE-bak"
+#     sudo cp /etc/resolv.conf "$RESOLV_FILE"
+# }
+
+xhost +local:
+
+test "$1" = "-p" && {
+    test -z "$2" || SH_ARG="-c"
+    proot --bind=/home/$USER:/home/$USER -r "$CHROOT_DIR" /bin/bash $SH_ARG "$@" || true
+} || {
+    test -z "$@" || SH_ARG="-c"
+    sudo env DISPLAY=$DISPLAY chroot "$CHROOT_DIR" /bin/bash $SH_ARG "$@"
+}

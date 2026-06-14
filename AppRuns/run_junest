@@ -1,0 +1,8 @@
+#!/bin/bash
+
+CWD="$PWD"
+JUNEST_PREFIX="$CWD/junest_qcine"
+
+export PATH="$CWD/junest/bin:$PATH"
+
+JUNEST_HOME="$JUNEST_PREFIX" junest -f

@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# ### AppGLIBC v1.0 - Verifica a versão do GLIBC de um binário - Mauricio Ferrari - 16/10/2022 ###
+#
+##########################################################################################################
+
+printf "\nVersões do GLIBC de $1:\n\n"
+
+sort -ru <(grep -Eo "GLIBC_[[:digit:]]+([.][[:digit:]]+)+" <(cut -d: -f2-3 <(paste -sd' ' <(ldd -v $1))))

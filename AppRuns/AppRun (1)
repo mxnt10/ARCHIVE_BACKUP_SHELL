@@ -1,0 +1,766 @@
+#!/bin/bash
+
+########################################################################################################
+#
+#      Lançador para Jogo dentro appimage GameLinux. Este lançador tem o objetivo de:
+#
+# 1: Verificar Dependências necessárias para o funcionamento do Software Dentro deste appimage.
+# 2: Pedir permição de super usuário para instalar as dependências necessárias.
+# 3: Testar Gpus e Drivers disponíveis para executar o software com a API Gráfica correta.
+# 4: Criar configurações de usuário para software dentro do appimage para a correta continuidade.
+#
+#######################################################################################################
+
+###########################################################################
+###############                               #############################
+############### Início do Bloco de Variáveis  #############################
+###############                               #############################
+###########################################################################
+
+HERE=$(cd "${0%/*}" && echo $PWD) 
+GAMELINUX_CONSULTA_OS_RELEASE_NOME=$(cat '/etc/os-release' '/usr/lib/os-release' | grep -w -m1 'ID' | cut -d'=' -f2 | tr '"' ' ')
+GAMELINUX_CONSULTA_OS_RELEASE_BASE=$(cat '/etc/os-release' '/usr/lib/os-release' | grep -w -m1 'ID_LIKE' | cut -d'=' -f2 | tr '"' ' ')
+GAMELINUX_VERIFICANDO_DEPENDENCIAS_NO_SISTEMA_UBUNTU_OU_DEBIAN=$(cat '/var/lib/dpkg/status' | grep -wE '(Package:|Architecture:)' | cut -d':' -f 2 | paste -d '' -s | tr ' ' ':')
+ARQUITETURAS_SUPORTADAS_BASE_DEBIAN=$(dpkg --print-architecture | grep -w -x 'i386' || dpkg --print-foreign-architectures | grep -w -x 'i386')
+GAMELINUX_NVIDIA_DRIVER_VERSION=$(nvidia-smi -q | grep -w "Driver Version" | cut -d ":" -f 2 | cut -d "." -f 1 | tr " " "-")
+
+GAMELINUX_ZENITY_TITLE='GameLinux Dependências' 
+GAMELINUX_ZENITY_TEXT='Atualizando o Repositório e instalando dependências'
+GAMELINUX_ZENITY_ICON_NAME=$(cat "$HERE/"*.desktop | grep -w -m1 'Icon' | cut -d '=' -f2)
+
+GAMELINUX_GAMENAME='Need For Speed Most Wanted'
+GAMELINUX_ICON="$HERE/need-for-speed-most-wanted.png"
+GAMELINUX_DIRETORIO_CONFIG="$HOME/.config/GameLinux"
+GAMELINUX_GAMEDIR="$GAMELINUX_DIRETORIO_CONFIG/$GAMELINUX_GAMENAME"
+INFO_DRIVERS_API_GRAFICA=$("$HERE/bin/vulkaninfo_i386" | grep -vwE '(llvmpipe|llvmpipe|FORMAT|FormatFeatureFlags|None|shader|VK_|=)' | grep -w -i 'GPU id' | tr -d ':' | tr ')(' ' ' | cut -d' ' -f 11,12,13,14,15,16,17,18,19,20,21,22,23 | sort -u && DRI_PRIME=1 "$HERE/bin/glxinfo_i386" | grep -w -m1 'OpenGL vendor string:' | cut -d':' -f2 | grep nouveau | tr 'n' 'N')
+RESOLUTION="$(xrandr -q | awk -F'current' -F',' 'NR==1 {gsub("( |current)","");print $2}')"
+
+Diretorio_do_executavel_windows='C:\\Need For Speed Most Wanted\\' 
+Arquivo_exe_executavel_windows_cfg=
+Arquivo_exe_executavel_windows='C:\\Need For Speed Most Wanted\\speed.exe'
+Limitar_FPS="30" # EX: 30 ou 60 ou 120
+Mostrar_fps_na_tela="0" # 1 para ativar ou 0 para desativar. 1 Enable 2 Disable
+Driver_de_audio_quando_usar_sdl="pulseaudio"
+Local_dos_plugins_gstreamer="$HERE/lib/gstreamer-1.0/:$HERE/lib64/gstreamer-1.0/" 
+Versao_do_windows="default" # winxp win7 win10 default
+Arquitetura_do_windows="win32" # win32 para windows 32bits (i386) ou win64 para windows de 64bits
+Dlls_para_desabilitar="winemenubuilder.exe,winemine.exe,svchost.exe,winedbg.exe,progman.exe,reg.exe,regsvr32.exe,robocopy.exe,taskmgr.exe,uninstaller.exe,winecfg.exe,control.exe,appwiz.cpl,inetcpl.cpl,mscoree,mshtml,atiadlxx,nvapi64,nvapi" 
+Dlls_modo_build=  # EX: "dinpu8.dll,ddraw.dll"
+Dlls_nativas="d3d9.dll,dxgi.dll,dinput8.dll" # EX: "dinpu8.dll,ddraw.dll"
+#Dlls_nativas="d3d9.dll,d3d10.dll,d3d10_1.dll,d3d10core.dll,d3d11.dll,dxgi.dll,dinput8.dll,EAX.DLL" # EX: "dinpu8.dll,ddraw.dll"
+Dlls_nativas_sem_vulkan="dinput8.dll" # EX: "dinpu8.dll,ddraw.dll"
+GAMELINUX_WINE_FULLSCREEN_FSR="0" # 1 ativado 0 desativado
+GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH="0"
+#WINE_VK_WAYLAND_WIDTH=1920 WINE_VK_WAYLAND_HEIGHT=1080
+
+DEPENDENCIAS_I386_COMUNS_UBUNTU_18_04_22_04_LTS='zenity sed x11-utils libvulkan-dev libx11-data libc6:i386 libsdl2-2.0-0:i386 libsdl2-gfx-1.0-0:i386 libsdl2-image-2.0-0:i386 libsdl2-ttf-2.0-0:i386 libxxf86vm1:i386 libxcb-xf86dri0:i386 libxdamage1:i386 libgssapi-krb5-2:i386 libegl1-mesa:i386 libgles2-mesa:i386 libglu1-mesa:i386 libglapi-mesa:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386 libwayland-egl1-mesa:i386 libvulkan1:i386 mesa-vulkan-drivers:i386 libxrandr2:i386 libwayland-client0:i386 libxext6:i386 libgl1-mesa-glx:i386 libcanberra-pulse:i386 libx11-xcb1:i386 libx11-6:i386 libjack-jackd2-0:i386 libvisual-0.4-0:i386 libfreetype6:i386 gstreamer1.0-pulseaudio:i386 libasound2:i386 libglib2.0-0:i386 libgphoto2-6:i386 libasound2-plugins:i386 libgstreamer-plugins-base1.0-0:i386 liblcms2-2:i386 libmpg123-0:i386 libopenal1:i386 libpcap0.8:i386 libfontconfig1:i386 libosmesa6:i386 libsdl2-2.0-0:i386 libxcomposite1:i386 libfontconfig1:i386 libasn1-8-heimdal:i386 libavahi-client3:i386 libavahi-common-data:i386 libexif12:i386 libheimntlm0-heimdal:i386 libhx509-5-heimdal:i386 libieee1284-3:i386 libjbig0:i386 libk5crypto3:i386 libkeyutils1:i386 libkrb5-26-heimdal:i386 libkrb5support0:i386 libsasl2-2:i386 libsasl2-modules:i386 libsasl2-modules-db:i386 libsqlite3-0:i386 libusb-1.0-0:i386 libv4lconvert0:i386 libwayland-cursor0:i386 libpulse0:i386 libwind0-heimdal:i386 libxpm4:i386 libunwind8:i386 libxml2:i386 zlib1g:i386 libcapi20-3:i386 libcups2:i386 libodbc1:i386 libsane1:i386 libv4l-0:i386 libxslt1.1:i386 libxtst6:i386 libjpeg-turbo8:i386 libxi6:i386 gstreamer1.0-gl:i386 libgstreamer-gl1.0-0:i386 gstreamer1.0-plugins-ugly:i386 mesa-vdpau-drivers:i386 libjpeg62:i386 libva2:i386 libspeex1:i386 libva-drm2:i386 libpangocairo-1.0-0:i386'
+
+DEPENDENCIAS_I386_AMD64_MULTILIB_BASE_ARCH='zenity gcc-libs gnutls vulkan-validation-layers vulkan-intel vulkan-radeon vulkan-icd-loader libva fontconfig lcms2 libxml2 libxcursor libxrandr libxdamage libxi gettext freetype2 glu libsm libpcap faudio giflib libpng libldap mpg123 openal v4l-utils libpulse alsa-lib alsa-plugins libjpeg-turbo libxcomposite libxinerama ocl-icd libxslt gst-plugins-base-libs vkd3d sdl2 sdl2_ttf sdl2_image sdl2_net libcups libidn11 pixman zlib mesa ncurses krb5 libxcb cairo libx11 libx86emu libxss libgphoto2 sane noto-fonts-emoji lib32-glibc lib32-gcc-libs lib32-gnutls lib32-vulkan-validation-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-icd-loader lib32-libva lib32-fontconfig lib32-lcms2 lib32-libxml2 lib32-libxcursor lib32-libxrandr lib32-libxdamage lib32-libxi lib32-gettext lib32-freetype2 lib32-glu lib32-libsm lib32-faudio lib32-libpcap lib32-giflib lib32-libpng lib32-libldap lib32-mpg123 lib32-openal lib32-v4l-utils lib32-libpulse lib32-alsa-lib lib32-alsa-plugins lib32-libjpeg-turbo lib32-libxcomposite lib32-libxinerama lib32-ocl-icd lib32-libxslt lib32-gst-plugins-base-libs lib32-vkd3d lib32-sdl2 lib32-sdl2_ttf lib32-sdl2_image lib32-libcups lib32-libidn11 lib32-pixman lib32-zlib lib32-mesa lib32-cairo lib32-libx11 lib32-libxcb lib32-krb5 lib32-ncurses lib32-libxss'
+
+DEPENDENCIAS_I686_FEDORA='zenity libFAudio.i686 pipewire.i686 pipewire-libs.i686 openssl-libs.i686 mesa-libOSMesa.i686 mesa-libglapi.i686 mesa-dri-drivers.i686 openldap.i686 ocl-icd.i686 pulseaudio-libs.i686 alsa-lib.i686 ncurses-libs.i686 libX11.i686 libXrandr.i686 mesa-vulkan-drivers.i686 vulkan-loader.i686 mesa-libGL.i686 gvfs.i686 SDL2.i686 SDL_ttf.i686 SDL_net.i686 SDL_sound.i686 SDL_image.i686 SDL_Pango.i686 libwayland-egl.i686 libXcomposite.i686 libXdamage.i686 libjpeg-turbo.i686 libpng.i686 zlib.i686 krb5-libs.i686 nss.i686'
+
+###########################################################################
+###############                               #############################
+###############   Fim do Bloco de Variáveis   #############################
+###############                               #############################
+###########################################################################
+mkdir -p "$GAMELINUX_DIRETORIO_CONFIG"
+###########################################################################
+###############                               #############################
+###############  Início do  Bloco de funções  #############################
+###############                               #############################
+###########################################################################
+
+###########################################################################
+#    Função para emitir uma mensagen de erro dependências não encontradas
+###########################################################################
+
+function função_zenity_dependencias_i386_não_encontradas() {
+
+zenity --display="$DISPLAY" --title='error' --ok-label='ok' --error --ellipsize --text="
+🔴 Erro : Dependencias i386 não encontradas
+🔵 Explicações.
+Um Software de Arquitetura i386 (32bits) precisa de dependências i386
+Para seu funcionamento. Distros Linux Amd64 (64bits) geralmente só tem 
+dependências amd64 e por isso é necessária a instalação de dependências
+i386 para que funcione softwares i386.
+🔵 Dicas Relevantes.
+Se estiver em algum sistema com alguma base que não seja Ubuntu
+Pode instalar algum software que demande as mesmas dependências
+deste pacote appimage, por exemplo Lutris ou o wine:i386.
+O AppImage já tem seu próprio wine com o software dentro e por 
+causa disso não precidas desses softwares do exemplo acima.
+O único motivo para Instalar é que se estiverem instalados
+as suas depenências também instarão instaladas e o appimage
+poderá funcionar normalmente em distros não baseadas em ubuntu.
+" && exit
+}
+
+###########################################################################
+#  Função mensagen de erro dependências não encontradas_pergunta instalar
+###########################################################################
+
+function função_zenity_dependencias_i386_não_encontradas_pergunta() {
+
+zenity --display="$DISPLAY" --title='error' --ok-label='Instalar' --question --ellipsize --text="
+<span size=\"xx-large\">
+
+Erro : Dependencias i386 não encontradas
+
+Explicações : Um Software de Arquitetura i386 (32bits) precisa de dependências i386
+Para seu funcionamento. Distros Linux Amd64 (64bits) geralmente só tem dependências 
+amd64 e por isso é necessária a instalação de dependências i386 para que funcione.
+
+Pergunta : Deseja instalar Dependências agora?
+ 
+</span>\n\n <b></b>."
+}
+
+####################################################################################
+# Função para Mostrar uma barra de progresso quando estiver instalando dependências
+####################################################################################
+
+function função_zenity_barra_de_progresso_pulssante() {
+
+#GAMELINUX_ZENITY_TITLE=" "
+#GAMELINUX_ZENITY_TEXT=" "
+#GAMELINUX_ICON=" "
+#GAMELINUX_ZENITY_ICON_NAME=" "
+
+zenity --display="$DISPLAY" --width=660 --height=100 --progress --pulsate --no-cancel --title="$GAMELINUX_ZENITY_TITLE" --text="<span size=\"xx-large\">$GAMELINUX_ZENITY_TEXT</span>\n\n <b></b>." --icon-name="$GAMELINUX_ZENITY_ICON_NAME" --window-icon="$GAMELINUX_ICON" --auto-close
+}
+
+
+####################################################################################
+# Função para Mostrar uma barra de progresso Executando
+####################################################################################
+
+function função_zenity_executando() {
+
+timeout 10 zenity --display="$DISPLAY" --width=400 --height=100 --progress --pulsate --no-cancel --title="$GAMELINUX_ZENITY_TITLE" --text="<span size=\"xx-large\">Executando</span>\n\n <b></b>." --icon-name="$GAMELINUX_ZENITY_ICON_NAME" --window-icon="$GAMELINUX_ICON" --auto-close
+}
+
+
+####################################################################################
+# Função que emite os comandos para instalar uma lista de dependências pré-escrita
+####################################################################################
+
+function função_instalar_dependências_i386_amd64_sistemas_base_ubuntu_debian() {
+
+pkexec sh -c "
+
+if   dpkg --print-architecture | grep -w -x 'i386'
+then
+     echo 'Arquitetura i386 já é a principal do sistema'
+elif dpkg --print-foreign-architectures | grep -w -x 'i386'
+then
+     echo 'IA GameLinux Encontrol a Arquitetura i386 secundária no sistema' 
+else
+     echo 'GameLinux vai adicinar ao dpkg a Arquitetura i386 como secundária' && sudo dpkg --add-architecture i386 && echo 'GameLinux adicinou ao dpkg a Arquitetura i386 secundária com sucesso'
+fi
+
+sudo apt update
+
+echo 'instalando dependências'
+
+sudo apt install -y $DEPENDENCIAS_I386_COMUNS_UBUNTU_18_04_22_04_LTS
+
+#sudo apt install -y $DEPENDENCIAS_I386_AMD64_COMUNS_UBUNTU_18_04_22_04_LTS
+
+sudo apt install -y libncurses6:i386 libncursesw6:i386 libncurses5:i386 libncursesw5:i386 || sudo apt install -y libncurses6:i386 libncursesw6:i386 || sudo apt install -y libncurses5:i386 libncursesw5:i386
+
+# sudo apt install -y libncurses6:amd64 libncursesw6:amd64 libncurses5:amd64 libncursesw5:amd64 || sudo apt install -y libncurses6:amd64 libncursesw6:amd64 || sudo apt install -y libncurses5:amd64 libncursesw5:amd64
+
+sudo apt install -y libvkd3d1
+sudo apt install -y libidn11:i386
+sudo apt install -y libldap-2.5-0:i386 || sudo apt install -y libldap-2.4-2:i386
+sudo apt install -y ocl-icd-libopencl1:i386 || sudo apt install -y libopencl-1.1-1:i386
+sudo apt install -y libssl3:i386 || sudo apt install -y libssl1.1:i386
+sudo apt install -y libwebp7:i386 || sudo apt install -y libwebp6:i386
+
+sudo apt install -y libfuse2 libfuse3-3 || sudo apt install -y libfuse2 || sudo apt install -y libfuse3-3
+
+if 
+nvidia-smi -L
+then
+     sudo apt install libnvidia-compute"$GAMELINUX_NVIDIA_DRIVER_VERSION":i386 libnvidia-decode"$GAMELINUX_NVIDIA_DRIVER_VERSION":i386 libnvidia-encode"$GAMELINUX_NVIDIA_DRIVER_VERSION":i386 libnvidia-fbc1"$GAMELINUX_NVIDIA_DRIVER_VERSION":i386 libnvidia-gl"$GAMELINUX_NVIDIA_DRIVER_VERSION":i386 
+else
+     echo 'Drive Nvidia não existe ou não está funcionando corretamente.'
+fi
+
+dpkg -V $DEPENDENCIAS_I386_COMUNS_UBUNTU_18_04_22_04_LTS && echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+
+"
+}
+
+
+####################################################################################
+# Função que emite os comandos para instalar uma lista de dependências pré-escrita
+####################################################################################
+
+function função_instalar_dependências_i386_amd64_sistemas_base_arch() {
+
+pkexec sh -c "
+
+#if  
+#     cat '/etc/pacman.conf' | grep -n -F '[multilib]' | grep '#'
+#then
+#     cat '/etc/pacman.conf' | grep -n -F '[multilib]' | grep '#' && SED_LINHA_REGEX=$(cat '/etc/pacman.conf' | grep -n -F '[multilib]' | grep '#' | cut -d ':' -f1) && sudo sed -i #''$SED_LINHA_REGEX','$SED_LINHA_REGEX's/#//' '/etc/pacman.conf'
+#     
+#else
+#     echo 'multilib Verificado'
+#fi
+
+yes y | LANGUAGE=en_US sudo pacman -Sy
+
+pacman -Qi zenity || yes y | LANGUAGE=en_US sudo pacman -Sy zenity
+pacman -Qi gcc-libs || yes y | LANGUAGE=en_US sudo pacman -Sy gcc-libs
+pacman -Qi gnutls || yes y | LANGUAGE=en_US sudo pacman -Sy gnutls
+pacman -Qi vulkan-validation-layers || yes y | LANGUAGE=en_US sudo pacman -Sy vulkan-validation-layers
+pacman -Qi vulkan-intel || yes y | LANGUAGE=en_US sudo pacman -Sy vulkan-intel
+pacman -Qi vulkan-radeon || yes y | LANGUAGE=en_US sudo pacman -Sy vulkan-radeon
+pacman -Qi vulkan-icd-loader || yes y | LANGUAGE=en_US sudo pacman -Sy vulkan-icd-loader
+pacman -Qi libva || yes y | LANGUAGE=en_US sudo pacman -Sy libva
+pacman -Qi fontconfig || yes y | LANGUAGE=en_US sudo pacman -Sy fontconfig
+pacman -Qi lcms2 || yes y | LANGUAGE=en_US sudo pacman -Sy lcms2
+pacman -Qi libxml2 || yes y | LANGUAGE=en_US sudo pacman -Sy libxml2
+pacman -Qi libxcursor || yes y | LANGUAGE=en_US sudo pacman -Sy libxcursor
+pacman -Qi libxrandr || yes y | LANGUAGE=en_US sudo pacman -Sy libxrandr
+pacman -Qi libxdamage || yes y | LANGUAGE=en_US sudo pacman -Sy libxdamage
+pacman -Qi libxi || yes y | LANGUAGE=en_US sudo pacman -Sy libxi
+pacman -Qi gettext || yes y | LANGUAGE=en_US sudo pacman -Sy gettext
+pacman -Qi freetype2 || yes y | LANGUAGE=en_US sudo pacman -Sy freetype2
+pacman -Qi glu || yes y | LANGUAGE=en_US sudo pacman -Sy glu
+pacman -Qi libsm || yes y | LANGUAGE=en_US sudo pacman -Sy libsm
+pacman -Qi libpcap || yes y | LANGUAGE=en_US sudo pacman -Sy libpcap
+pacman -Qi faudio || yes y | LANGUAGE=en_US sudo pacman -Sy faudio
+pacman -Qi giflib || yes y | LANGUAGE=en_US sudo pacman -Sy giflib
+pacman -Qi libpng || yes y | LANGUAGE=en_US sudo pacman -Sy libpng
+pacman -Qi libldap || yes y | LANGUAGE=en_US sudo pacman -Sy libldap
+pacman -Qi mpg123 || yes y | LANGUAGE=en_US sudo pacman -Sy mpg123
+pacman -Qi openal || yes y | LANGUAGE=en_US sudo pacman -Sy openal
+pacman -Qi v4l-utils || yes y | LANGUAGE=en_US sudo pacman -Sy v4l-utils
+pacman -Qi libpulse || yes y | LANGUAGE=en_US sudo pacman -Sy libpulse
+pacman -Qi alsa-lib || yes y | LANGUAGE=en_US sudo pacman -Sy alsa-lib
+pacman -Qi alsa-plugins || yes y | LANGUAGE=en_US sudo pacman -Sy alsa-plugins
+pacman -Qi libjpeg-turbo || yes y | LANGUAGE=en_US sudo pacman -Sy libjpeg-turbo
+pacman -Qi libxcomposite || yes y | LANGUAGE=en_US sudo pacman -Sy libxcomposite
+pacman -Qi libxinerama || yes y | LANGUAGE=en_US sudo pacman -Sy libxinerama
+pacman -Qi ocl-icd || yes y | LANGUAGE=en_US sudo pacman -Sy ocl-icd
+pacman -Qi libxslt || yes y | LANGUAGE=en_US sudo pacman -Sy libxslt
+pacman -Qi gst-plugins-base-libs || yes y | LANGUAGE=en_US sudo pacman -Sy gst-plugins-base-libs
+pacman -Qi vkd3d || yes y | LANGUAGE=en_US sudo pacman -Sy vkd3d
+pacman -Qi sdl2 || yes y | LANGUAGE=en_US sudo pacman -Sy sdl2
+pacman -Qi sdl2_ttf || yes y | LANGUAGE=en_US sudo pacman -Sy sdl2_ttf
+pacman -Qi sdl2_image || yes y | LANGUAGE=en_US sudo pacman -Sy sdl2_image
+pacman -Qi sdl2_net || yes y | LANGUAGE=en_US sudo pacman -Sy sdl2_net
+pacman -Qi libcups || yes y | LANGUAGE=en_US sudo pacman -Sy libcups
+pacman -Qi libidn11 || yes y | LANGUAGE=en_US sudo pacman -Sy libidn11
+pacman -Qi pixman || yes y | LANGUAGE=en_US sudo pacman -Sy pixman
+pacman -Qi zlib || yes y | LANGUAGE=en_US sudo pacman -Sy zlib
+pacman -Qi mesa || yes y | LANGUAGE=en_US sudo pacman -Sy mesa
+pacman -Qi ncurses || yes y | LANGUAGE=en_US sudo pacman -Sy ncurses
+pacman -Qi krb5 || yes y | LANGUAGE=en_US sudo pacman -Sy krb5
+pacman -Qi libxcb || yes y | LANGUAGE=en_US sudo pacman -Sy libxcb
+pacman -Qi cairo || yes y | LANGUAGE=en_US sudo pacman -Sy cairo
+pacman -Qi libx11 || yes y | LANGUAGE=en_US sudo pacman -Sy libx11
+pacman -Qi libx86emu || yes y | LANGUAGE=en_US sudo pacman -Sy libx86emu
+pacman -Qi libxss || yes y | LANGUAGE=en_US sudo pacman -Sy libxss
+pacman -Qi libgphoto2 || yes y | LANGUAGE=en_US sudo pacman -Sy libgphoto2
+pacman -Qi sane || yes y | LANGUAGE=en_US sudo pacman -Sy sane
+pacman -Qi noto-fonts-emoji || yes y | LANGUAGE=en_US sudo pacman -Sy noto-fonts-emoji
+pacman -Qi lib32-glibc || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-glibc
+pacman -Qi lib32-gcc-libs || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-gcc-libs
+pacman -Qi lib32-gnutls || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-gnutls
+pacman -Qi lib32-vulkan-validation-layers || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-vulkan-validation-layers
+pacman -Qi lib32-vulkan-intel || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-vulkan-intel
+pacman -Qi lib32-vulkan-radeon || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-vulkan-radeon
+pacman -Qi lib32-vulkan-icd-loader || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-vulkan-icd-loader
+pacman -Qi lib32-libva || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libva
+pacman -Qi lib32-fontconfig || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-fontconfig
+pacman -Qi lib32-lcms2 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-lcms2
+pacman -Qi lib32-libxml2 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxml2
+pacman -Qi lib32-libxcursor || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxcursor
+pacman -Qi lib32-libxrandr || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxrandr
+pacman -Qi lib32-libxdamage || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxdamage
+pacman -Qi lib32-libxi || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxi
+pacman -Qi lib32-gettext || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-gettext
+pacman -Qi lib32-freetype2 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-freetype2 
+pacman -Qi lib32-glu || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-glu
+pacman -Qi lib32-libsm || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libsm
+pacman -Qi lib32-faudio || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-faudio
+pacman -Qi lib32-libpcap || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libpcap
+pacman -Qi lib32-giflib || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-giflib
+pacman -Qi lib32-libpng || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libpng
+pacman -Qi lib32-libldap || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libldap
+pacman -Qi lib32-mpg123 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-mpg123
+pacman -Qi lib32-openal || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-openal
+pacman -Qi lib32-v4l-utils || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-v4l-utils
+pacman -Qi lib32-libpulse || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libpulse
+pacman -Qi lib32-alsa-lib || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-alsa-lib
+pacman -Qi lib32-alsa-plugins || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-alsa-plugins
+pacman -Qi lib32-libjpeg-turbo || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libjpeg-turbo
+pacman -Qi lib32-libxcomposite || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxcomposite
+pacman -Qi lib32-libxinerama || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxinerama
+pacman -Qi lib32-ocl-icd || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-ocl-icd
+pacman -Qi lib32-libxslt || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxslt
+pacman -Qi lib32-gst-plugins-base-libs || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-gst-plugins-base-libs
+pacman -Qi lib32-vkd3d || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-vkd3d
+pacman -Qi lib32-sdl2 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-sdl2
+pacman -Qi lib32-sdl2_ttf || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-sdl2_ttf
+pacman -Qi lib32-sdl2_image || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-sdl2_image
+pacman -Qi lib32-libcups || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libcups
+pacman -Qi lib32-libidn11 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libidn11
+pacman -Qi lib32-pixman || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-pixman
+pacman -Qi lib32-zlib || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-zlib
+pacman -Qi lib32-mesa || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-mesa
+pacman -Qi lib32-cairo || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-cairo
+pacman -Qi lib32-libx11 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libx11
+pacman -Qi lib32-libxcb || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxcb
+pacman -Qi lib32-krb5 || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-krb5
+pacman -Qi lib32-ncurses || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-ncurses
+pacman -Qi lib32-libxss || yes y | LANGUAGE=en_US sudo pacman -Sy lib32-libxss
+
+pacman -Qi $DEPENDENCIAS_I386_AMD64_MULTILIB_BASE_ARCH && echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+"
+}
+
+function função_instalar_dependências_i386_amd64_fedora() {
+
+pkexec sh -c "
+
+yes y | LANGUAGE=en_US sudo dnf install $DEPENDENCIAS_I686_FEDORA
+
+rpm -qa | grep mesa-dri-drivers | grep i686 && rpm -qa | grep openldap | grep i686 && rpm -qa | grep ocl-icd | grep i686 && rpm -qa | grep pulseaudio-libs | grep i686 && rpm -qa | grep alsa-lib | grep i686 && rpm -qa | grep ncurses-libs | grep i686 && rpm -qa | grep libX11 | grep i686 && rpm -qa | grep libXrandr | grep i686 && rpm -qa | grep mesa-vulkan-drivers | grep i686 && rpm -qa | grep vulkan-loader | grep i686 && rpm -qa | grep mesa-libGL | grep i686 && rpm -qa | grep gvfs | grep i686 && rpm -qa | grep SDL2 | grep i686 && rpm -qa | grep SDL_ttf | grep i686 && rpm -qa | grep SDL_net | grep i686 && rpm -qa | grep SDL_sound | grep i686 && rpm -qa | grep SDL_image | grep i686 && rpm -qa | grep SDL_Pango | grep i686 && rpm -qa | grep libwayland-egl | grep i686 && rpm -qa | grep libXcomposite | grep i686 && rpm -qa | grep libXdamage | grep i686 && rpm -qa | grep libjpeg-turbo | grep i686 && rpm -qa | grep libpng | grep i686 && rpm -qa | grep zlib | grep i686 && rpm -qa | grep krb5-libs | grep i686 && rpm -qa | grep nss | grep i686 && rpm -qa | grep libFAudio | grep i686 && rpm -qa | grep pipewire | grep i686 && rpm -qa | grep pipewire-libs | grep i686 && rpm -qa | grep openssl-libs | grep i686 && rpm -qa | grep mesa-libOSMesa | grep i686 && rpm -qa | grep mesa-libglapi | grep i686 && rpm -qa | grep zenity && echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+
+"
+} 
+
+####################################################################################
+# Função que Verifica se as dependencias necessárias estão instaladas 
+####################################################################################
+
+function função_verificar_dependências() {
+
+if   
+     cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -w -m1 'GameLinux_Dependências_Instaladas'
+then
+     echo 'Dependências Já foram instaladas por GameLinux'
+elif 
+     cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -w -m1 'ok'
+then
+     echo 'Dependências Já foram instaladas por outro software que demanda as mesmas dependências'
+elif 
+     dpkg -V 'lutris' 'mesa-vulkan-drivers:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'playonlinux' 'mesa-vulkan-drivers:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'q4wine' 'wine32' 'mesa-vulkan-drivers:i386'
+then 
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'mesa-vulkan-drivers:i386' 'wine-stable:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'mesa-vulkan-drivers:i386' 'wine-development:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'mesa-vulkan-drivers:i386' 'dxvk-wine32-development:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'mesa-vulkan-drivers:i386' 'wine32-development:i386'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V 'mesa-vulkan-drivers:i386' 'wine-staging:i386'
+then
+    echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     dpkg -V $DEPENDENCIAS_I386_COMUNS_UBUNTU_18_04_22_04_LTS
+then
+     echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     pacman -Qi 'zenity' 'lutris' 'lib32-mesa' 'lib32-ncurses'  'lib32-vulkan-icd-loader' 'lib32-alsa-plugins' 'lib32-gst-plugins-base-libs'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     pacman -Qi $DEPENDENCIAS_I386_AMD64_MULTILIB_BASE_ARCH
+then 
+     echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     rpm -qa | grep mesa-dri-drivers | grep i686 && rpm -qa | grep mesa-vulkan-drivers | grep i686 && rpm -qa | grep lutris
+then 
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+elif 
+     rpm -qa | grep mesa-dri-drivers | grep i686 && rpm -qa | grep openldap | grep i686 && rpm -qa | grep ocl-icd | grep i686 && rpm -qa | grep pulseaudio-libs | grep i686 && rpm -qa | grep alsa-lib | grep i686 && rpm -qa | grep ncurses-libs | grep i686 && rpm -qa | grep libX11 | grep i686 && rpm -qa | grep libXrandr | grep i686 && rpm -qa | grep mesa-vulkan-drivers | grep i686 && rpm -qa | grep vulkan-loader | grep i686 && rpm -qa | grep mesa-libGL | grep i686 && rpm -qa | grep gvfs | grep i686 && rpm -qa | grep SDL2 | grep i686 && rpm -qa | grep SDL_ttf | grep i686 && rpm -qa | grep SDL_net | grep i686 && rpm -qa | grep SDL_sound | grep i686 && rpm -qa | grep SDL_image | grep i686 && rpm -qa | grep SDL_Pango | grep i686 && rpm -qa | grep libwayland-egl | grep i686 && rpm -qa | grep libXcomposite | grep i686 && rpm -qa | grep libXdamage | grep i686 && rpm -qa | grep libjpeg-turbo | grep i686 && rpm -qa | grep libpng | grep i686 && rpm -qa | grep zlib | grep i686 && rpm -qa | grep krb5-libs | grep i686 && rpm -qa | grep nss | grep i686 && rpm -qa | grep libFAudio | grep i686 && rpm -qa | grep pipewire | grep i686 && rpm -qa | grep pipewire-libs | grep i686 && rpm -qa | grep openssl-libs | grep i686 && rpm -qa | grep mesa-libOSMesa | grep i686 && rpm -qa | grep mesa-libglapi | grep i686 && rpm -qa | grep zenity
+then 
+     echo 'GameLinux_Dependências_Instaladas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+else 
+     clear && echo 'Dependencias não encontradas' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+fi
+}
+
+##################################################################################################################################
+###############  Fim do Bloco de funções para dependências  ####################################################################
+#
+#🟥função_zenity_executando
+#  Barra de progresso Executando
+#
+#🟥função_zenity_dependencias_i386_não_encontradas_pergunta
+# Mensagem de erro se dependências não for encontradas. pergunta se deseja instalar.
+#
+#🟥função_zenity_dependencias_i386_não_encontradas
+# Mensagem de erro se dependências não for encontradas.
+# 
+#🟥função_zenity_barra_de_progresso_pulssante
+# Barra de progresso. Variáveis de título,texto,ícone da janela,nome do ícone, podem ser definidas antes de executar.
+#
+#🟥função_verificar_dependências
+# Função que verifica se as dependências necessárias estão instaladas
+#
+#🟥função_instalar_dependências_i386_amd64_sistemas_base_ubuntu_debian
+# Função de instalar as dependências em sistemas debian ou ubuntu e distros baseados nesses sistemas. 
+#
+#🟥função_instalar_dependências_i386_amd64_sistemas_base_arch
+# Função de instalar as dependências em sistemas arch e distros baseados nesses sistemas. 
+#
+#🟥função_instalar_dependências_i386_amd64_fedora
+# Função de instalar as dependências em sistemas fedora. 
+#
+###################################################################################################################################
+
+if    
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)'
+then
+      echo 'Dependências encontradas'      
+elif      
+      echo "$GAMELINUX_CONSULTA_OS_RELEASE_NOME $GAMELINUX_CONSULTA_OS_RELEASE_BASE" | grep -wiE -m1 '(ubuntu|debian|zorin|pop)'
+then
+      função_verificar_dependências | GAMELINUX_ZENITY_TEXT='Verificando Dependências' função_zenity_barra_de_progresso_pulssante 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_zenity_dependencias_i386_não_encontradas_pergunta || exit 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_instalar_dependências_i386_amd64_sistemas_base_ubuntu_debian | função_zenity_barra_de_progresso_pulssante
+      
+elif  
+      echo "$GAMELINUX_CONSULTA_OS_RELEASE_NOME $GAMELINUX_CONSULTA_OS_RELEASE_BASE" | grep -wiE -m1 '(manjaro|biglinux)'
+then
+     função_verificar_dependências | GAMELINUX_ZENITY_TEXT='Verificando Dependências' função_zenity_barra_de_progresso_pulssante 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_zenity_dependencias_i386_não_encontradas_pergunta || exit 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_instalar_dependências_i386_amd64_sistemas_base_arch | função_zenity_barra_de_progresso_pulssante
+
+elif  
+      echo "$GAMELINUX_CONSULTA_OS_RELEASE_NOME $GAMELINUX_CONSULTA_OS_RELEASE_BASE" | grep -wiE -m1 '(fedora|Fedora Linux 36)'
+then
+     função_verificar_dependências | GAMELINUX_ZENITY_TEXT='Verificando Dependências' função_zenity_barra_de_progresso_pulssante 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_zenity_dependencias_i386_não_encontradas_pergunta || exit 
+      cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_instalar_dependências_i386_amd64_fedora | função_zenity_barra_de_progresso_pulssante  
+elif  
+      echo "$GAMELINUX_CONSULTA_OS_RELEASE_NOME $GAMELINUX_CONSULTA_OS_RELEASE_BASE" | grep -wiE -m1 '(Regata OS|regataos)' && echo 'Bypass'
+then
+     echo 'ok' > "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg"
+else
+      echo 'deu merda!'
+fi # terminal o trecho de código
+###########################################################################################################################################################################################
+
+cat "$GAMELINUX_DIRETORIO_CONFIG/Dependências.cfg" | grep -wE '(GameLinux_Dependências_Instaladas|ok)' || função_zenity_dependencias_i386_não_encontradas 
+
+function função_teste_opengl() { 
+timeout 3 "${HERE}/bin/glxgears_i386" -info -geometry 600x500 -display "$DISPLAY" | grep -w 'GL_VENDOR'
+}
+
+function função_teste_nouveau() { 
+DRI_PRIME=1 timeout 3 "${HERE}/bin/glxgears_i386" -info -geometry 600x500 -display "$DISPLAY" | grep -w 'GL_VENDOR' | cut -d '=' -f2 | grep 'nouveau'
+}
+
+function função_teste_nvidia() { 
+VK_ICD_NVIDIA=$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep 'nvidia' | paste -d: -s )
+__NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia EGL_NV_triple_buffer=1 __VK_LAYER_NV_optimus=NVIDIA VK_ICD_FILENAMES="$VK_ICD_NVIDIA" "${HERE}/bin/vulkan-smoketest_i386" --w 600 --h 500 --c 300
+}
+
+function função_teste_intel() { 
+VK_ICD_INTEL=$(ls /usr/share/vulkan/icd.d/*intel*.json /etc/vulkan/icd.d/*intel*.json | grep 'intel' | paste -d: -s )
+VK_ICD_FILENAMES="$VK_ICD_INTEL" "${HERE}/bin/vulkan-smoketest_i386" --w 600 --h 500 --c 700
+}
+
+function função_teste_amd_mesa() { 
+VK_ICD_AMD_MESA=$(ls /usr/share/vulkan/icd.d/*radeon*.json /etc/vulkan/icd.d/*radeon*.json | grep 'radeon' | paste -d: -s )
+VK_ICD_FILENAMES="$VK_ICD_AMD_MESA" "${HERE}/bin/vulkan-smoketest_i386" --w 600 --h 500 --c 300
+}
+
+function função_teste_amd_gpupro() {
+VK_ICD_AMD_GPUPRO=$(ls /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /etc/vulkan/icd.d/*amd*.json | grep 'amd' | paste -d: -s )
+VK_ICD_FILENAMES="$VK_ICD_AMD_GPUPRO" "${HERE}/bin/vulkan-smoketest_i386" --w 600 --h 500 --c 300
+}
+
+function função_mensagens_boas_vindas() {
+zenity --title='Bem vindo' --ok-label='Próximo' --info --ellipsize --text="
+<span size=\"xx-large\">
+🔵$GAMELINUX_GAMENAME. Jogo empacotado em AppImage para Linux🔵
+
+                           🇧🇷 Inscreva-se Nos canais : 🇧🇷 GameLinux 🇧🇷
+
+🔴 https://www.youtube.com/channel/UCrE7Vzc6G971XnrDyo53mGA 🔴
+</span>\n\n <b></b>."
+}
+
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep -wE '(opengl|nvidia|nouveau|intel|amd_mesa|amd_gpupro)' || função_mensagens_boas_vindas
+
+################### Criar diretório para atalhos e Configurações ##############################################################################################################################################
+mkdir -p "$GAMELINUX_GAMEDIR/dosdevices" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local/Microsoft" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local/Microsoft/Windows" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local/Microsoft/Windows/History" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local/Microsoft/Windows/INetCache" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Local/Microsoft/Windows/INetCookies" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/LocalLow" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Network Shortcuts" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Printer Shortcuts" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Recent" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/SendTo" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Start Menu" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Themes" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Templates" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Administrative Tools" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/StartUp" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Contacts" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Desktop" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Documents" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Downloads" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Favorites" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Links" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Music" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Pictures" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Saved Games" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Searches" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Temp" "$GAMELINUX_GAMEDIR/drive_c/users/$USER/Videos" "$GAMELINUX_GAMEDIR/drive_c/users/Public/Desktop" "$GAMELINUX_GAMEDIR/drive_c/users/Public/Documents" "$GAMELINUX_GAMEDIR/drive_c/users/Public/Music" "$GAMELINUX_GAMEDIR/drive_c/users/Public/Pictures" "$GAMELINUX_GAMEDIR/drive_c/users/Public/Videos" && echo -e "\e[1;37;44m Diretório de usuário do windows foi criado dentro do diretório espelho \e[0m" || echo -e "\e[1;37;44m Diretório de usuário do windows Já existe e por isso não foram refeitos \e[0m"
+################### Deleta atalhos antigos SE existirem #######################################################################################################################################################
+#find "$GAMELINUX_GAMEDIR/dosdevices/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+#find "$GAMELINUX_GAMEDIR/drive_c/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+#find "$GAMELINUX_GAMEDIR/dosdevices/"* -xtype l -delete # comando deleta atalhos quebrados
+#find "$GAMELINUX_GAMEDIR/drive_c/"* -xtype l -delete # comando deleta atalhos quebrados
+
+mkdir -p "$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/salvo" #"$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/Languages"
+
+find "$GAMELINUX_GAMEDIR/dosdevices/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+find "$GAMELINUX_GAMEDIR/drive_c/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+find "$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+
+
+find "$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/Languages/"* -maxdepth 1 -type l -ls -delete #comando deleta atalhos
+
+ln -s "/" "$GAMELINUX_GAMEDIR/dosdevices/z:"                                                                         && echo -e "\e[1;37;44m Drive z: Verificado \e[0m"
+ln -s "$HOME" "$GAMELINUX_GAMEDIR/dosdevices/h:"                                                                     && echo -e "\e[1;37;44m Drive h: Verificado \e[0m"
+ln -s "$GAMELINUX_GAMEDIR/drive_c" "$GAMELINUX_GAMEDIR/dosdevices/c:"                                                && echo -e "\e[1;37;44m Drive c: Verificado \e[0m"
+ln -s "$HERE/drive_c/$GAMELINUX_GAMENAME/"* "$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/"                        && echo -e "\e[1;37;44m Atalho $GAMELINUX_GAMENAME Verificado \e[0m"
+ln -s "$HERE/drive_c/"* "$GAMELINUX_GAMEDIR/drive_c/"                                                                && echo -e "\e[1;37;44m Atalho drive_c Verificado \e[0m"
+
+#ln -s "$HERE/drive_c/$GAMELINUX_GAMENAME/Languages/"* "$GAMELINUX_GAMEDIR/drive_c/$GAMELINUX_GAMENAME/Languages/"    && echo -e "\e[1;37;44m Languages Verificado \e[0m"
+
+if
+     ls "$GAMELINUX_GAMEDIR" | grep -wxE '(system.reg|user.reg|userdef.reg|.update-timestamp)'
+then
+     echo 'Os arquivos system.reg user.reg userdef.reg .update-timestamp Já existem no diretório espelho'
+else
+     cp "$HERE/system.reg" "$HERE/user.reg" "$HERE/userdef.reg" "$HERE/.update-timestamp" "/$GAMELINUX_GAMEDIR/"
+fi
+##############################################################################################################################################################################################################
+
+function função_gpu_teste_select() {
+if 
+      GAMELINUX_GPUS_TESTE=$(zenity --height=320 --width=500 --title='Marque a GPU que deseja testar' --list --text="$INFO_DRIVERS_API_GRAFICA" --radiolist --column 'Marcar' --column '🔲 GPUs Drivers OpenGL Vulkan' FALSE '🟧 OpenGL' FALSE '🔵 Intel' FALSE '🟢 Nvidia' FALSE '🟢 Nouveau' FALSE '🔴 Amd_Mesa' FALSE '🔴 Amd_GpuPro' --cancel-label=Sair --ok-label=Testar | cut -d ' ' -f 2 | tr '[:upper:]' '[:lower:]') && função_teste_$GAMELINUX_GPUS_TESTE 
+then
+     zenity --ellipsize --question --text="<span size=\"xx-large\">Deseja Usar Gpu $GAMELINUX_GPUS_TESTE para Executar o Jogo?</span>\n\n <b></b>." && echo "$GAMELINUX_GPUS_TESTE" > "$GAMELINUX_GAMEDIR/GPU.cfg" || função_gpu_teste_select
+else 
+     zenity --ellipsize --question --icon-name=error --text="<span size=\"xx-large\">Gpu Não encontrado. Deseja voltar ao menu principal?</span>\n\n <b></b>." && função_gpu_teste_select || exit
+     
+fi
+}
+
+############################################################################################################################################################################################################
+if 
+     cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep -wE '(opengl|nvidia|nouveau|intel|amd_mesa|amd_gpupro)'
+then
+     echo 'configração de Gpu encontrada'
+else
+     função_gpu_teste_select
+fi
+############################################################################################################################################################################################################
+function função_soundtrack_home() {
+
+zenity --display="$DISPLAY" --icon-name="$GAMELINUX_ZENITY_ICON_NAME" --window-icon="$GAMELINUX_ICON" --title="$GAMELINUX_GAMENAME Soundtrack" --ok-label='Sim' --question --ellipsize --text="
+<span size=\"xx-large\">
+Deseja por uma cópia da Soundtrack do Jogo na Home?
+</span>\n\n <b></b>." && cp -r -f "$HERE/drive_c/$GAMELINUX_GAMENAME/Music" "$HOME/$GAMELINUX_GAMENAME Soundtrack" 
+
+echo 'ok' > "$GAMELINUX_GAMEDIR/Soundtrack.cfg"
+}
+
+if 
+     cat "$GAMELINUX_GAMEDIR/Soundtrack.cfg" | grep -w 'ok'
+then
+     echo 'Soundtrack Já foi para a Home'
+else
+     função_soundtrack_home
+fi
+############################################################################################################################################################################################################
+
+
+function função_executar_cfg_com_opengl() {
+__GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 MESA_GLTHREAD=true  __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_opengl_virtual_desktop() {
+__GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 MESA_GLTHREAD=true  __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_opengl() {
+__GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 MESA_GLTHREAD=true  __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_opengl_virtual_desktop() {
+__GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 MESA_GLTHREAD=true  __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_cfg_com_nouveau() {
+DRI_PRIME=1 __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_nouveau_virtual_desktop() {
+DRI_PRIME=1 __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_nouveau_virtual_desktop() {
+DRI_PRIME=1 __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_nouveau() {
+DRI_PRIME=1 __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas_sem_vulkan=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_cfg_com_intel() {
+VK_ICD_INTEL=$(ls /usr/share/vulkan/icd.d/*intel*.json /etc/vulkan/icd.d/*intel*.json | grep 'intel' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_INTEL" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_intel_virtual_desktop() {
+VK_ICD_INTEL=$(ls /usr/share/vulkan/icd.d/*intel*.json /etc/vulkan/icd.d/*intel*.json | grep 'intel' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_INTEL" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_intel() {
+VK_ICD_INTEL=$(ls /usr/share/vulkan/icd.d/*intel*.json /etc/vulkan/icd.d/*intel*.json | grep 'intel' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_INTEL" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_intel_virtual_desktop() {
+VK_ICD_INTEL=$(ls /usr/share/vulkan/icd.d/*intel*.json /etc/vulkan/icd.d/*intel*.json | grep 'intel' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_INTEL" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_cfg_com_nvidia() {
+VK_ICD_NVIDIA=$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep 'nvidia' | paste -d: -s ) && __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia EGL_NV_triple_buffer=1 __VK_LAYER_NV_optimus=NVIDIA VK_ICD_FILENAMES="$VK_ICD_NVIDIA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_nvidia_virtual_desktop() {
+VK_ICD_NVIDIA=$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep 'nvidia' | paste -d: -s ) && __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia EGL_NV_triple_buffer=1 __VK_LAYER_NV_optimus=NVIDIA VK_ICD_FILENAMES="$VK_ICD_NVIDIA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_nvidia() {
+VK_ICD_NVIDIA=$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep 'nvidia' | paste -d: -s ) && __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia EGL_NV_triple_buffer=1 __VK_LAYER_NV_optimus=NVIDIA VK_ICD_FILENAMES="$VK_ICD_NVIDIA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_nvidia_virtual_desktop() {
+VK_ICD_NVIDIA=$(ls /usr/share/vulkan/icd.d/*nvidia*.json /etc/vulkan/icd.d/*nvidia*.json | grep 'nvidia' | paste -d: -s ) && __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia EGL_NV_triple_buffer=1 __VK_LAYER_NV_optimus=NVIDIA VK_ICD_FILENAMES="$VK_ICD_NVIDIA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_cfg_com_amd_mesa() {
+VK_ICD_AMD_MESA=$(ls /usr/share/vulkan/icd.d/*radeon*.json /etc/vulkan/icd.d/*radeon*.json | grep 'radeon' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_MESA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_amd_mesa_virtual_desktop() {
+VK_ICD_AMD_MESA=$(ls /usr/share/vulkan/icd.d/*radeon*.json /etc/vulkan/icd.d/*radeon*.json | grep 'radeon' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_MESA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_amd_mesa() {
+VK_ICD_AMD_MESA=$(ls /usr/share/vulkan/icd.d/*radeon*.json /etc/vulkan/icd.d/*radeon*.json | grep 'radeon' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_MESA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_amd_mesa_virtual_desktop() {
+VK_ICD_AMD_MESA=$(ls /usr/share/vulkan/icd.d/*radeon*.json /etc/vulkan/icd.d/*radeon*.json | grep 'radeon' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_MESA" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_cfg_com_amd_gpupro() {
+VK_ICD_AMD_GPUPRO=$(ls /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /etc/vulkan/icd.d/*amd*.json | grep 'amd' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_GPUPRO" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_cfg_com_amd_gpupro_virtual_desktop() {
+VK_ICD_AMD_GPUPRO=$(ls /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /etc/vulkan/icd.d/*amd*.json | grep 'amd' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_GPUPRO" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows_cfg" | GAMELINUX_ZENITY_TITLE="Executando Configurações" função_zenity_executando
+}
+
+function função_executar_com_amd_gpupro() {
+VK_ICD_AMD_GPUPRO=$(ls /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /etc/vulkan/icd.d/*amd*.json | grep 'amd' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_GPUPRO" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+function função_executar_com_amd_gpupro_virtual_desktop() {
+VK_ICD_AMD_GPUPRO=$(ls /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /opt/amdgpu-pro/etc/vulkan/icd.d/*amd*.json /etc/vulkan/icd.d/*amd*.json | grep 'amd' | paste -d: -s ) && VK_ICD_FILENAMES="$VK_ICD_AMD_GPUPRO" WINE_VK_VULKAN_ONLY=1 VKD3D_DEBUG=none VKD3D_SHADER_DEBUG=none __GL_THREADED_OPTIMIZATIONS=1 __GL_SHADER_DISK_CACHE=1 __GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1 __GL_DXVK_OPTIMIZATIONS=1 DXVK_STATE_CACHE=0 DXVK_ASYNC=1 MESA_GLTHREAD=true DXVK_LOG_LEVEL=none DXVK_LOG_PATH="$GAMELINUX_GAMEDIR/" DXVK_HUD="$Mostrar_fps_na_tela" DXVK_FRAME_RATE="$Limitar_FPS" DXVK_CONFIG_FILE="${HERE}/dxvk.conf" __GL_SHADER_DISK_CACHE_PATH="$GAMELINUX_GAMEDIR/" DXVK_STATE_CACHE_PATH="$GAMELINUX_GAMEDIR/" XDG_CACHE_HOME="$GAMELINUX_GAMEDIR/" LD_LIBRARY_PATH="${HERE}/lib:${HERE}/lib64:/lib:/lib/i386-linux-gnu:/lib/x86_64-linux-gnu:/lib32:/lib64:/libx32:/usr/lib/i386-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib32:/usr/lib64:/usr/libx32:${LD_LIBRARY_PATH}" XDG_DATA_DIRS="${HERE}/share:${HERE}/usr/share:/usr/share:/usr/local/share:$HOME/.local/share:${XDG_DATA_DIRS}" PATH="${HERE}/bin:$PATH" FONTCONFIG_PATH="${HERE}/etc/fonts" DISPLAY="$DISPLAY" PULSE_LATENCY_MSEC=60 WINE_FULLSCREEN_FSR="$GAMELINUX_WINE_FULLSCREEN_FSR" INE_FULLSCREEN_FSR_STRENGTH="$GAMELINUX_INE_FULLSCREEN_FSR_STRENGTH" WINE_LARGE_ADDRESS_AWARE=1 STAGING_SHARED_MEMORY=1 NTFS_MODE=0 WINE64PRELOADER="${HERE}/bin/wine64-preloader" WINEPRELOADER="${HERE}/bin/wine-preloader" WINEPATH="${HERE}/bin/winepath" WINEDBG="${HERE}/bin/winedbg" WINECONSOLE="${HERE}/bin/wineconsole" WINECFG="${HERE}/bin/winecfg" WINEBOOT="${HERE}/bin/wineboot" WINESERVER="${HERE}/bin/wineserver" WINDOWS_VERSION="$Versao_do_windows" WINEESYNC=1 GST_PLUGIN_PATH="$Local_dos_plugins_gstreamer" SDL_AUDIODRIVER="$Driver_de_audio_quando_usar_sdl" WINE64="${HERE}/bin/wine64" WINE="${HERE}/bin/wine" USE_SYSTEM_WINE=0 WINEDLLOVERRIDES="$Dlls_para_desabilitar=d;$Dlls_modo_build=b;$Dlls_nativas=n" WINEPREFIX="$GAMELINUX_GAMEDIR" WINEARCH="$Arquitetura_do_windows" "${HERE}/bin/wine" 'C:\\windows\\system32\\start.exe' /wait /max /b /d "$Diretorio_do_executavel_windows" "C:\windows\system32\explorer.exe" /desktop=GameLinux,$RESOLUTION "$Arquivo_exe_executavel_windows" | GAMELINUX_ZENITY_TITLE="Executando $GAMELINUX_GAMENAME" função_zenity_executando
+}
+
+if
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'opengl'
+then
+     # função_executar_cfg_com_opengl 
+       função_executar_com_opengl
+     # função_executar_cfg_com_opengl_virtual_desktop 
+     # função_executar_com_opengl_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+
+elif     
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'nouveau'
+then  
+     # função_executar_cfg_com_nouveau 
+       função_executar_com_nouveau
+     # função_executar_cfg_com_nouveau_virtual_desktop 
+     # função_executar_com_nouveau_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+elif
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'intel'
+then
+     # função_executar_cfg_com_intel
+       função_executar_com_intel
+     # função_executar_cfg_com_intel_virtual_desktop
+     # função_executar_com_intel_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+
+elif
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'nvidia'
+then
+     # função_executar_cfg_com_nvidia 
+       função_executar_com_nvidia
+     # função_executar_cfg_com_nvidia_virtual_desktop 
+     # função_executar_com_nvidia_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+
+elif
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'amd_mesa'
+then
+     # função_executar_cfg_com_amd_mesa 
+       função_executar_com_amd_mesa
+     # função_executar_cfg_com_amd_mesa_virtual_desktop 
+     # função_executar_com_amd_mesa_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+
+elif
+cat "$GAMELINUX_GAMEDIR/GPU.cfg" | grep 'amd_gpupro'
+then
+     # função_executar_cfg_com_amd_gpupro
+       função_executar_com_amd_gpupro
+     # função_executar_cfg_com_amd_gpupro_virtual_desktop
+     # função_executar_com_amd_gpupro_virtual_desktop
+     xrandr -d $DISPLAY -s 0
+else 
+     echo 'erro' # Futuro debug 
+fi
+
+#WINEFSYNC_FUTEX2=0
+#VKD3D: enabled
+#clear
+echo -e "\e[1;30;40m
+
+             https://www.youtube.com/channel/UCrE7Vzc6G971XnrDyo53mGA
+
+                    ████████████████████████████████████████                    
+                    ██████▀░░░░░░░░▀████████▀▀░░░░░░░▀██████                    
+                    ████▀░░░░░░░░░░░░▀████▀░░░░░░░░░░░░▀████                    
+                    ██▀░░░░░░░░░░░░░░░░▀▀░░░░░░░░░░░░░░░░▀██                    
+                    ██░░░░░░░░░░░░░░░░░░░▄▄░░░░░░░░░░░░░░░██                    
+                    ██░░░░░░░░░░░░░░░░░░█░█░░░░░░░░░░░░░░░██                    
+                    ██░░░░░░░░░░░░░░░░░▄▀░█░░░░░░░░░░░░░░░██                    
+                    ██░░░░░░░░░░████▄▄▄▀░░▀▀▀▀▄░░░░░░░░░░░██                    
+                    ██▄░░░░░░░░░████░░░░░░░░░░█░░░░░░░░░░▄██                    
+                    ████▄░░░░░░░████░░░░░░░░░░█░░░░░░░░▄████                    
+                    ██████▄░░░░░████▄▄▄░░░░░░░█░░░░░░▄██████                    
+                    ████████▄░░░▀▀▀▀░░░▀▀▀▀▀▀▀░░░░░▄████████                    
+                    ██████████▄░░░░░░░░░░░░░░░░░░▄██████████                    
+                    ████████████▄░░░░░░░░░░░░░░▄████████████                    
+                    ██████████████▄░░░░░░░░░░▄██████████████                    
+                    ████████████████▄░░░░░░▄████████████████                    
+                    ██████████████████▄▄▄▄██████████████████                    
+                    ██████████████ GameLinux ███████████████                    
+                                                            \e[0m"
